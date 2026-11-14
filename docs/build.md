@@ -8,7 +8,7 @@
 - Pillow：`python -m pip install -r requirements-dev.txt`。建议使用虚拟环境。
 - LLVM Clang 与 LLD，需包含 ARM、RISC-V 后端。通过 `--clang` 指定可执行文件，或放入 PATH。
 - 主控构建另需 WCH `libISP585.a`，见下面的版本约束。
-- Node.js 20+ 仅用于可选协议测试，浏览器工具不需要 npm 依赖。
+- Node.js 22+ 用于测试或可选歌词后台；基础浏览器工具不需要 npm 依赖。字库生成另用 fontTools，已列在开发依赖中。
 
 ## 原厂输入
 
@@ -49,6 +49,8 @@ python tools/build.py ips --stock inputs/ips-stock.bin --clang "/path/to/clang" 
 - 仅本机构建目录中的 ELF 与生成头文件。
 
 图标定制可加 `--keys /path/to/keys.json`。可选主题为 `pink`、`mint`、`mono`。不传 `--out` 时所有构建产物留在被忽略的 `build/`。
+
+普通 IPS 现在增加了只读的芯片容量／系列查询，公开 UI 候选标为 0.6.3，仍保留 L6 能力值。需要歌词时，按 [独立歌词文档](lyrics.md) 生成字库，再使用 `--lyrics --font build/font/FONT.BIN`。该分支输出到 `build/ips-lyrics/`，普通版保留在 `build/ips/`，不互相覆盖。
 
 ## 主控
 
@@ -95,6 +97,7 @@ python tools/build.py ips --stock inputs/ips-stock.bin --restore-stock
 
 - 原厂文件 SHA、原始分支指令、前 512 字节与非补丁区域不变。
 - IPS 只替换八个已列明的 BL，新增代码限制在 `0x0807EC90..0x08080000`，模块状态限制在 `0x2005F000..0x20060000`。
+- 可选歌词分支使用同一原厂 SHA 与八个 hook，新代码严格限定在 `0x08080000..0x08088000`，只支持已通过 APP 只读核验的 1024KiB AT32F435。生成镜像 540672 字节，保留更高处的原厂设置区；不依赖私人测试固件前缀。
 - 主控只替换四处已列明的调用／跳转，代码不得侵入 `0x49000`；`0x49000..0x49FFF` 为独立校时页。
 - 指定版本 SDK 不得含新的 `.data` / `.bss` 或未解析符号；重定位须在允许的相对类型和被复制代码段之内。
 - SHA 与边界检查不证明任何未测试硬件布局安全，也不能代替恢复入口和实机验证。
@@ -103,7 +106,7 @@ python tools/build.py ips --stock inputs/ips-stock.bin --restore-stock
 
 ```sh
 python -m unittest discover -s tests -p "test_*.py"
-node --test tests/protocol.test.mjs tests/hid.test.mjs
+npm test
 ```
 
 仓库测试覆盖主机协议、错误目标拒绝、全部烧录字节覆盖、校时流程与素材生成。开发阶段还使用了真实指令与模拟外设的模型；它们仍不是物理设备证明。每次修改固件或关键地址后应重新构建并审查差异，再进行有记录的实机测试。

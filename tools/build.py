@@ -60,7 +60,8 @@ def isp_blob(lib,out,clang):
  (out/'main-clock-isp-blob.h').write_text('#define ISP_BLOB_SIZE '+str(len(blob))+'u\n#define ISP_CMD_OFFSET '+str(h[4])+'u\nstatic const u8 isp_blob[]={'+','.join(map(str,blob))+'};\n',encoding='utf8')
  return {'sha256':digest(blob),'librarySha256':ISP_SHA,'bytes':len(blob),'entryOffset':h[4]}
 def build(a):
- out=Path(a.out).resolve()/(a.target+'-restore' if a.restore_stock else a.target);out.mkdir(parents=True,exist_ok=True)
+ require(not a.lyrics or a.target=='ips' and not a.restore_stock,'--lyrics requires a normal IPS build')
+ out=Path(a.out).resolve()/(a.target+'-restore' if a.restore_stock else 'ips-lyrics' if a.lyrics else a.target);out.mkdir(parents=True,exist_ok=True)
  original=checked(a.stock,IPS_SHA if a.target=='ips' else MAIN_SHA);base=0x08004000 if a.target=='ips' else 0x2000;image=bytearray(original);patches=[];meta={}
  if a.restore_stock:
   size=507904 if a.target=='ips' else 294912;image.extend(b'\xff'*(size-len(image)));(out/f'rainy75v2-{a.target}-restore.bin').write_bytes(image)
@@ -70,6 +71,25 @@ def build(a):
  if a.target=='ips':
   generate(a.keys,a.theme,out/'assets',out);linker=ROOT/'firmware/ips/linker.ld';sources=[ROOT/'firmware/ips/native_ui.c',ROOT/'firmware/ips/rtc.c']
   flags=['--target=arm-none-eabi','-mcpu=cortex-m4','-mthumb','-mfloat-abi=soft'];low,high=0x0807ec90,0x08080000
+  if a.lyrics:
+   from fontpack import Font20
+   from PIL import Image
+   require(a.font,'--font is required with --lyrics');font=Path(a.font).read_bytes();pack=Font20(font)
+   require(len(font)<=4194304,'Font exceeds the supported external storage capacity')
+   (out/'FONT.BIN').write_bytes(font)
+   for name in ['OFL-1.1.txt','FONT-NOTICE.txt']:
+    notice=Path(a.font).parent/name;require(notice.is_file(),'Keep font license and notice beside FONT.BIN')
+    if notice.resolve()!=(out/name).resolve():shutil.copy2(notice,out/name)
+   count,index,offset,fallback,total,crc,hcrc=struct.unpack_from('<7I',font,16)
+   (out/'lyrics_font_config.h').write_text(f'#define FONT_COUNT {count}u\n#define FONT_DATA_OFFSET {offset}u\n#define FONT_TOTAL_BYTES {total}u\n#define FONT_BODY_CRC {crc}u\n',encoding='utf8')
+   from assets import load,rgb565
+   theme=load(ROOT/'profiles/themes.json')[a.theme]
+   with Image.open(out/'assets'/f'robot-{a.theme}.gif') as gif:
+    for i in range(gif.n_frames):
+     gif.seek(i);require(gif.tile and gif.tile[0][1]==(0,0,320,172),'Lyrics requires complete cache GIF frames')
+     color=gif.convert('RGB').getpixel((22,39));require(rgb565('#%02x%02x%02x'%color)!=rgb565(theme['background']),'Cache frame marker equals player background')
+   linker=ROOT/'firmware/ips-lyrics/linker.ld';sources=[ROOT/'firmware/ips-lyrics/native_ui.c',ROOT/'firmware/ips/rtc.c',ROOT/'firmware/ips-lyrics/lyrics.c'];low,high=0x08080000,0x08088000
+   meta.update(variant='lyrics-v1',protocol='L6+LY1',requiredFlashKiB=1024,requiredSeries=13,codeStart=low,imageEnd=high,iapEraseEnd=0x080c0000,preservedSettings=[0x080fc000,0x080fe000,0x080ff800],fontSha256=digest(font),fontBodyCrc=crc,titleMaxGlyphs=96)
  else:
   require(a.isp_lib,'--isp-lib is required for main firmware');meta['isp']=isp_blob(Path(a.isp_lib).resolve(),out,clang)
   low=(0x2000+len(original)+15)&~15;high=0x49000;linker=out/'main.ld'
@@ -87,7 +107,10 @@ def build(a):
   require(image[at:at+len(old)]==old,'Original instruction mismatch');image[at:at+len(old)]=new;patches.append((at,len(old)))
  if a.target=='ips':
   for addr,old,symbol in [(0x0807ca16,0x0807a600,'start'),(0x0805b5b8,0x080596ac,'ips'),(0x0807a73e,0x0802dca8,'gui'),(0x0807a760,0x0805b244,'image'),(0x0807a764,0x0805b030,'misc'),(0x0805b282,0x0805d6f2,'cached_draw'),(0x0805b462,0x0805ac72,'native_key'),(0x0805b53a,0x0805ae0a,'native_status')]:patch(addr-base,thumb_bl(addr,old),thumb_bl(addr,symbols['rainy_hook_'+symbol]))
-  image.extend(b'\xff'*((-len(image))%512));pid=0x3078;meta.update(theme=a.theme,protocol='L6',moduleRam='0x2005f000..0x20060000')
+  if a.lyrics:
+   require(len(image)+base<=high,'Lyrics image exceeds audited interval');image.extend(b'\xff'*(high-base-len(image)))
+  else:image.extend(b'\xff'*((-len(image))%512))
+  pid=0x3078;meta.update(theme=a.theme,uiVersion='0.6.3',moduleRam='0x2005f000..0x20060000');meta.setdefault('protocol','L6')
  else:
   for addr,old,symbol,rd in [(0x24680,0x20392,'rainy_main_rtc_probe',0),(0x134d8,0x120b8,'rainy_main_rtc_init',1)]:patch(addr-base,jal(addr,old,rd),jal(addr,symbols[symbol],rd))
   for addr,following,symbol in [(0x2000a874,0x2000752a,'rainy_clock_worker_a'),(0x2000b49a,0x200091fa,'rainy_clock_worker_b')]:patch(addr-0x20000000+4,jal(addr,0x20007000,1)+jal(addr+4,following,1),far_call(addr,symbols[symbol]))
@@ -98,4 +121,4 @@ def build(a):
  manifest={'format':'rainy75v2-tft/build-v1','target':a.target,'status':'experimental; hardware validation incomplete','bytes':len(image),'sha256':digest(image),'stockSha256':digest(original),'applicationBase':0x4000 if a.target=='ips' else 0x2000,'iapPid':pid,'appPid':0x3075,'patches':[{'fileOffset':p,'bytes':n} for p,n in patches],**meta}
  (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf8');print(json.dumps(manifest))
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('target',choices=['ips','main']);p.add_argument('--stock',type=Path,required=True);p.add_argument('--isp-lib',type=Path);p.add_argument('--restore-stock',action='store_true');p.add_argument('--clang');p.add_argument('--riscv-march',default='rv32imac_zicsr_zifencei');p.add_argument('--out',type=Path,default=ROOT/'build');p.add_argument('--keys',type=Path,default=ROOT/'profiles/keys.json');p.add_argument('--theme',default='pink');build(p.parse_args())
+ p=argparse.ArgumentParser();p.add_argument('target',choices=['ips','main']);p.add_argument('--stock',type=Path,required=True);p.add_argument('--isp-lib',type=Path);p.add_argument('--restore-stock',action='store_true');p.add_argument('--clang');p.add_argument('--riscv-march',default='rv32imac_zicsr_zifencei');p.add_argument('--out',type=Path,default=ROOT/'build');p.add_argument('--keys',type=Path,default=ROOT/'profiles/keys.json');p.add_argument('--theme',default='pink');p.add_argument('--lyrics',action='store_true');p.add_argument('--font',type=Path);build(p.parse_args())

@@ -2,6 +2,8 @@
 
 先读 README.md，以及与任务相关的 docs。主控 CH585 与 IPS AT32F435 是不同芯片。当前主控 7.1 校时修正仍待实机确认，不把模型或网页测试写成实测。
 
+先区分功能：基础屏幕版位于 `firmware/ips/`、`profiles/` 与普通 IPS 构建；歌词播放器是可选的 `firmware/ips-lyrics/`、`desktop/` 与字库构建。只改基础版时不要默认添加歌词依赖或让用户刷歌词固件。歌词版要求 USB、Windows 后台和匹配字库，详情见 `docs/lyrics.md`；定制任务优先用 `docs/ai-guide.md` 中对应提示词。
+
 ## 修改范围
 
 - 默认进行源码、文档、离线预览、构建和测试；只有用户明确要求设备写入时，才在其授权范围内执行。已有明确授权不需重复索取。
@@ -19,7 +21,9 @@
 
 ```sh
 python -m unittest discover -s tests -p "test_*.py"
-node --test tests/protocol.test.mjs tests/hid.test.mjs
+npm test
 ```
 
 固件改动还要使用用户本机提供的匹配输入构建，检查差异仅在声明的补丁与新增区域。没有这些输入时如实说明未构建，不伪造通过记录。
+
+歌词版有本地输入时，运行 `python tools/test_lyrics_model.py`；依赖及模型边界见 `docs/validation.md`。浏览器测试只用离线模拟，不访问真实设备。保留字体 OFL 与 Elog 上游 MIT 声明，不能把第三方内容重新统一声明为自有 MIT。

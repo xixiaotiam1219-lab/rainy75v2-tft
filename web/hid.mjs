@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import {VID,APP_PID,MAIN_CAP,IPS_CAP,ACK_READ,parseAck,command,frame,crc16,localSeconds,timeDifference,decodeTime,validateGif,TARGETS} from './protocol.mjs';
+import {validateFont} from './font.mjs';
 export const wait=ms=>new Promise(r=>setTimeout(r,ms));
 export function reportLength(reports,length){return reports?.some(r=>r.reportId===0&&r.items.reduce((n,i)=>n+i.reportSize*i.reportCount,0)/8===length);}
 export function validDevice(device,pid,length){return device?.vendorId===VID&&device.productId===pid&&device.collections?.some(c=>c.usagePage===0xff60&&c.usage===0x61&&reportLength(c.outputReports,length)&&reportLength(c.inputReports,length));}
@@ -11,11 +12,11 @@ export class HidIO{
   if(!d.opened)await d.open();return new HidIO(d,length);
  }
  async send(bytes){if(bytes.length>this.length)throw Error('Report too large');const p=new Uint8Array(this.length);p.set(bytes);await this.device.sendReport(0,p);}
- async exchange(bytes,match,timeout=2500){
+ async exchange(bytes,match,timeout=2500,minLength=this.length){
   if(this.pending)throw Error('Another exchange is pending');this.pending=true;let handler,timer;
   try{
    const reply=new Promise((resolve,reject)=>{
-    handler=e=>{if(e.reportId!==0||e.data.byteLength!==this.length)return;const p=new Uint8Array(e.data.buffer,e.data.byteOffset,e.data.byteLength);if(match(p))resolve(new Uint8Array(p));};
+    handler=e=>{if(e.reportId!==0||e.data.byteLength<minLength||e.data.byteLength>this.length)return;const p=new Uint8Array(e.data.buffer,e.data.byteOffset,e.data.byteLength);if(match(p))resolve(new Uint8Array(p));};
     this.device.addEventListener('inputreport',handler);timer=setTimeout(()=>reject(Error('设备应答超时')),timeout);
    });
    const [,result]=await Promise.all([this.send(bytes),reply]);return result;
@@ -41,6 +42,11 @@ export class AppClient{
  }
  async queryMain(f){return (await this.request(15,f,[],a=>a.status===0xd0+f)).value;}
  async queryIps(f){return (await this.request(11,f,[],a=>a.status===0xb0+f)).value;}
+ async probeLyricsTarget(){
+  if(await this.queryMain(9)!==MAIN_CAP||await this.queryIps(0)!==IPS_CAP)throw Error('请先安装匹配的主控 V7.1 与本版普通 IPS');
+  const flashKiB=await this.queryIps(14),series=await this.queryIps(15);
+  if(flashKiB!==1024||series!==13)throw Error('歌词版只支持已读取确认的 1024KiB AT32F435');return{flashKiB,series};
+ }
  async status(){
   const mainCap=await this.queryMain(9);if(mainCap!==MAIN_CAP)throw Error('主控不是支持的 V7.1，未进行写入');
   const ipsCap=await this.queryIps(0);if(ipsCap!==IPS_CAP)throw Error('屏幕不是支持的 L6，未进行写入');
@@ -61,7 +67,7 @@ export class AppClient{
  async control(op){const id=++this.seq&65535;for(let i=0;;i++)try{return await this.request(op,id);}catch(e){if(e.status!==2||i>=30)throw e;await this.pause(50);}}
  async stock(sub,a=0,b=0,c=0,payload=[]){
   return this.sendAwait(frame(sub,a,b,c,payload),ack=>{
-   if(ack.sub!==sub)return false;if(sub===2&&ack.value!==(a|b<<8))return false;
+   if(ack.sub!==sub||ack.status===255)return false;if(sub===2&&ack.value!==(a|b<<8))return false;
    if(ack.status!==0&&!(sub===1&&ack.status===6))throw Error('素材指令返回状态 '+ack.status);return true;
   });
  }
@@ -75,16 +81,31 @@ export class AppClient{
    await this.stock(3,0,0,0,[crc&255,crc>>>8]);ok=true;
   }finally{if(!ok)try{await this.stock(4);}catch{}await this.control(5);}
  }
+ async uploadFont(bytes,{replaceConfirmed=false,progress=()=>{}}={}){
+  if(!replaceConfirmed)throw Error('请先确认写入或替换 FONT.BIN');const font=validateFont(bytes);
+  await this.request(24,1,[],a=>a.status===0xa6&&a.value===0x4c59);
+  const low=(await this.request(22,5,[],a=>a.status===0xc5)).value,high=(await this.request(22,6,[],a=>a.status===0xc6)).value;
+  if(high*65536+low!==font.bodyCrc)throw Error('字库与屏幕固件不匹配，未写入');
+  const crc=crc16(bytes),begin=new Uint8Array(17);begin.set(new TextEncoder().encode('FONT    BIN'));new DataView(begin.buffer).setUint32(11,bytes.length,true);new DataView(begin.buffer).setUint16(15,crc,true);
+  await this.control(2);let ok=false;
+  try{
+   await this.stock(1,0,0,0,begin);
+   for(let offset=0,seq=0;offset<bytes.length;offset+=232,seq++){await this.stock(2,seq&255,seq>>>8,0,bytes.subarray(offset,offset+232));progress(Math.min(1,(offset+232)/bytes.length));}
+   await this.stock(3,0,0,0,[crc&255,crc>>>8]);ok=true;
+  }finally{if(!ok)try{await this.stock(4);}catch{}await this.control(5);}
+ }
  async enterIap(target){const t=TARGETS[target];if(!t)throw Error('Unknown target');await this.io.send(new Uint8Array(t.boot));await this.close();}
 }
 export class FlashClient{
  constructor(io,plan,{pause=wait}={}){this.io=io;this.plan=plan;this.pause=pause;}
  static async connect(plan){return new FlashClient(await HidIO.choose(plan.pid,64),plan);}
- async ok(p){const r=await this.io.exchange(p,()=>true,5000);if(r[0]||r[1])throw Error('烧录应答失败：'+r[0]+','+r[1]);}
+ async ok(p,timeout=5000){const r=await this.io.exchange(p,()=>true,timeout,2);if(r.length<2||r[0]||r[1])throw Error('烧录应答失败：'+r[0]+','+r[1]);}
  async flash(progress=()=>{}){
   const {bytes,base,pid}=this.plan;if(!validDevice(this.io.device,pid,64))throw Error('目标错误，未擦除');
+  if(this.plan.variant==='lyrics-v1'&&!this.plan.hardwareChecked)throw Error('请先在 APP 模式读取并核对歌词版芯片信息，未擦除');
   const erase=new Uint8Array(6);erase[0]=0x81;new DataView(erase.buffer).setUint32(2,base,true);
-  await this.ok(erase);await this.pause(1200);
+  progress('擦除',0);
+  try{await this.ok(erase,20000);}catch(e){throw Error('擦除阶段：'+e.message+'；设备可能仍在升级模式，未确认擦除结果。');}await this.pause(1200);
   for(let off=0;off<bytes.length;off+=62){const n=Math.min(62,bytes.length-off),p=new Uint8Array(n+2);p.set([0x80,n]);p.set(bytes.subarray(off,off+n),2);await this.ok(p);progress('写入',(off+n)/bytes.length);}
   await this.ok(new Uint8Array([0x80,0]));
   const verify=async off=>{const p=new Uint8Array(62);p.set([0x82,56]);new DataView(p.buffer).setUint32(2,base+off,true);p.set(bytes.subarray(off,off+56),6);await this.ok(p);};

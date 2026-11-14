@@ -24,7 +24,9 @@ export function validateGif(bytes){
 export async function sha256(bytes){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');}
 export const TARGETS={main:{pid:0x3079,base:0x2000,bytes:294912,boot:[0xbe,0xfc,4,0xed]},ips:{pid:0x3078,base:0x4000,bytes:507904,boot:[0xbe,0xfc,5,0,0xed]}};
 export async function validateBuild(bytes,m){
- const t=TARGETS[m?.target];if(!t||m.format!=='rainy75v2-tft/build-v1'||m.applicationBase!==t.base||m.iapPid!==t.pid||bytes.length!==m.bytes||bytes.length!==t.bytes)throw Error('构建清单或目标不匹配');
+ const t=TARGETS[m?.target],lyrics=m?.target==='ips'&&m.variant==='lyrics-v1';
+ if(lyrics&&(m.requiredFlashKiB!==1024||m.requiredSeries!==13||m.codeStart!==0x08080000||m.imageEnd!==0x08088000||m.iapEraseEnd!==0x080c0000))throw Error('歌词版硬件与地址边界不匹配');
+ if(!t||m.format!=='rainy75v2-tft/build-v1'||m.applicationBase!==t.base||m.iapPid!==t.pid||bytes.length!==m.bytes||bytes.length!==(lyrics?540672:t.bytes)||m.variant&&!lyrics)throw Error('构建清单或目标不匹配');
  if(!/^[a-f0-9]{64}$/.test(m.sha256)||await sha256(bytes)!==m.sha256)throw Error('固件 SHA-256 不匹配，未擦除');
- return {...t,target:m.target,bytes:new Uint8Array(bytes),sha256:m.sha256};
+ return {...t,target:m.target,variant:lyrics?'lyrics-v1':undefined,hardwareChecked:!lyrics,bytes:new Uint8Array(bytes),sha256:m.sha256};
 }
