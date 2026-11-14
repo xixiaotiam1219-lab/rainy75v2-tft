@@ -1,0 +1,26 @@
+{
+  "pink": {
+    "name": "樱花粉",
+    "background": "#fff1f6",
+    "panel": "#fff8e9",
+    "shell": "#f0c1d5",
+    "ink": "#a35479",
+    "accent": "#d58eae"
+  },
+  "mint": {
+    "name": "薄荷绿",
+    "background": "#edf8f2",
+    "panel": "#f8fff6",
+    "shell": "#b1d8c9",
+    "ink": "#366c61",
+    "accent": "#70a998"
+  },
+  "mono": {
+    "name": "墨水灰",
+    "background": "#e9e9e7",
+    "panel": "#fafaf7",
+    "shell": "#b7b9b5",
+    "ink": "#343b37",
+    "accent": "#8c948b"
+  }
+}

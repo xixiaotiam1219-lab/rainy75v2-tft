@@ -1,0 +1,19 @@
+# Local third-party inputs and generated firmware are never release sources.
+inputs/*
+!inputs/README.md
+build/
+dist/
+local/
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+*.bin
+*.elf
+*.o
+*.a
+*.map
+*.log
+.env
+.env.*
+!.env.example

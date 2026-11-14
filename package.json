@@ -1,0 +1,9 @@
+{
+  "name": "rainy75v2-tft",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "license": "MIT",
+  "description": "Experimental Rainy75 V2 native TFT UI and clock tools",
+  "scripts": {"test": "node --test tests/protocol.test.mjs tests/hid.test.mjs"},
+  "engines": {"node": ">=20"}
+}
