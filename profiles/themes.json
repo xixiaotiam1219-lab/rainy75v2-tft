@@ -5,7 +5,9 @@
     "panel": "#fff8e9",
     "shell": "#f0c1d5",
     "ink": "#a35479",
-    "accent": "#d58eae"
+    "accent": "#d58eae",
+    "lyricsBorder": "#e6bfd1",
+    "lyricsPanel": "#fff9fc"
   },
   "mint": {
     "name": "薄荷绿",

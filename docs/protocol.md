@@ -61,11 +61,19 @@ V7.1 主控附加只读查询：10/11 guard 低/高、12/13 参考计数低/高�
 | 21 | 提交三个完整字段；positionMs:u32、durationMs:u32、playing:u8、scrollElapsed:u32、scrollSpan:u32 | `QUEUED / revision`，再查真正 committed revision |
 | 25 | 同17字节计时 payload，不重新读取字体 | `DONE / sequence` |
 | 23 | payload0=按键页，1=歌词页 | `DONE`，查询实际模式确认 |
+| 26 | `layout:u8`：0=20px双行，1=04大字字幕；默认1 | `DONE / sequence`；OP22字段8确认 |
+| 27 | 12B：ASCII `FNT!` + expectedOldBodyCrc:u32LE + expectedOldBytes:u32LE | `QUEUED / sequence`；OP22字段9确认真正完成 |
 | 22 | 查询状态 | `C0+field / value` |
 
-OP22字段：0 ready；1 mode；2 error；3 committed revision；4 job及queued；5/6编译期字体bodyCRC低/高；7标题字形上限。重连先等旧任务完成并从 committed revision 续号，不能从固定序号覆盖未完成任务。
+OP22字段：0 ready；1 mode；2 error；3 committed revision；4 job及queued；5/6编译期字体bodyCRC低/高；7标题字形上限；8布局；9字库替换状态（0未请求、2排队、1完成、7失败）；10替换结果（0成功、原生FatFs非零错误、FC分配失败、FD排队取消、FE旧头部或大小不匹配）。未知字段返回RANGE，主机据此兼容旧歌词固件。重连先等旧任务完成并从 committed revision 续号，不能从固定序号覆盖未完成任务。
+
+OP27只在OP2暂停后接受，且字库句柄/缓存已释放；UART只校验请求并排队，不读写文件。GUI在LCD DMA空闲时只读固定`FONT.BIN`头部，核对magic/version、大小、记录的bodyCRC及头部CRC；关闭句柄，再调用原生FatFs unlink同一固定文件。OP5恢复会取消尚未执行的请求，避免遗留排队操作在后续上传中执行。接口不接收文件名，不提供格式化或任意文件删除。
+
+主机`AppClient.uploadFont(newBytes,{replaceConfirmed:true,replaceExisting:true,previousFont:oldBytes})`先完整验证两份本地R75F/2及新固件的编译CRC，再暂停、OP27、轮询完成、BEGIN/DATA/END，最后恢复。维护失败不会开始新文件上传；传输开始后失败才ABORT。首次安装不传`replaceExisting`和`previousFont`。替换有短暂无字库窗口，不能视为原子更新或完整旧文件读回校验。
 
 字体格式 R75F/2：256字节头，排序Unicode u32索引，每字52字节（advance/flags加20×20单色50字节）。固件编译绑定 count、offset、total和bodyCRC；电脑、固件、屏内 FONT.BIN须同源。UTF-8不直接发送到设备，后台NFC规范化后转字形索引；超出覆盖回退为方框。
+
+布局1从同一20px mask以整数2倍绘制40px当前句，标题保持20px；不生成40px堆位图、不增加字库文件或因切换布局重新读取字形。大字歌词在字幕卡片内横滚，换句纵向过渡裁剪在卡片内部。布局0保留原20px两行样式。
 
 字形文件读取和位图生成只在GUI worker、LCD DMA不忙时处理，每轮最多四个52B字形读取。已有标题和预载下一句的不可变mask可复制复用，分配失败保持已发布画面。标题独立滚动，不受歌词换句或计时重置影响。
 

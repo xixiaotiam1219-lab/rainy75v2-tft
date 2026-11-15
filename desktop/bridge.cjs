@@ -7,15 +7,16 @@ const T=require('./transport.cjs'),{LyricLink}=require('./lyric-link.cjs'),{Musi
 const {DATA:OUT}=require('./config.cjs'),DEMO=process.argv.includes('--demo');
 if(!DEMO&&process.platform!=='win32')throw Error('Realtime media requires Windows; use --demo for an offline preview');
 fs.mkdirSync(OUT,{recursive:true});const settingsPath=path.join(OUT,'background-settings.json');
-let settings={offsetMs:0,mode:1};try{Object.assign(settings,JSON.parse(fs.readFileSync(settingsPath)));}catch{}settings.offsetMs=Math.max(-10000,Math.min(10000,Number(settings.offsetMs)||0));settings.mode=settings.mode===0?0:1;
+let settings={offsetMs:0,mode:1,layout:1};try{Object.assign(settings,JSON.parse(fs.readFileSync(settingsPath)));}catch{}settings.offsetMs=Math.max(-10000,Math.min(10000,Number(settings.offsetMs)||0));settings.mode=settings.mode===0?0:1;settings.layout=settings.layout===0?0:1;
 const persist=()=>fs.writeFileSync(settingsPath,JSON.stringify(settings,null,2));
 const music=new Music(DEMO?{fetcher:async()=>({provider:'demo',lines:[{at:0,text:'把小小的屏幕点亮'},{at:5000,text:'文字跟着旋律慢慢滚动'},{at:10000,text:'今天也有新的好心情'}]})}:{});let c=null,link=null,wantedMode=settings.mode,connected=false,error=null,stopping=false,connectAt=0,lastKey='',lastSync=0,hotkey={ready:false,error:null},helper;
-let wire={revision:null,committedAt:null,commitMs:null,timingAt:null,titleLimit:null,frame:null};
+let wire={revision:null,committedAt:null,commitMs:null,timingAt:null,titleLimit:null,layout:null,layoutSupported:false,frame:null};
 const state=()=>{const frame=music.frame(settings.offsetMs);return{pid:process.pid,demo:DEMO,connected,wantedMode,settings,hotkey,error,music:music.state(),frame,wire};};
-async function disconnect(){const old=c;c=null;link=null;connected=false;lastKey='';if(old)await old.close().catch(()=>{});}
+async function disconnect(){const old=c;c=null;link=null;connected=false;lastKey='';wire.layoutSupported=false;if(old)await old.close().catch(()=>{});}
 async function loop(){
  while(!stopping){try{
-  if(!c){if(Date.now()<connectAt){await T.delay(150);continue;}connectAt=Date.now()+4000;c=await T.usb();await T.ready(c);link=new LyricLink(c);await link.ready();connected=true;error=null;lastKey='';wire.titleLimit=link.titleLimit;}
+  if(!c){if(Date.now()<connectAt){await T.delay(150);continue;}connectAt=Date.now()+4000;c=await T.usb();await T.ready(c);link=new LyricLink(c);await link.ready();connected=true;error=null;lastKey='';wire.titleLimit=link.titleLimit;wire.layoutSupported=link.layoutSupported;}
+  if(link.layoutSupported&&link.layout!==settings.layout)await link.setLayout(settings.layout);wire.layout=link.layout;
   const frame=music.frame(settings.offsetMs),key=JSON.stringify([frame.title,frame.current,frame.next]);
   if(key!==lastKey){const start=Date.now(),revision=await link.setFrame(frame),committedAt=Date.now();lastKey=key;wire={...wire,revision,committedAt,commitMs:committedAt-start,frame};
    // Font masks take time to prepare. Resample the real media timeline after
@@ -40,6 +41,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.headers.origin&&req.headers.origin!=='http://127.0.0.1:'+server.address().port){reply(403,{error:'来源不匹配'});return;}
  try{let body='';req.setEncoding('utf8');for await(const chunk of req){body+=chunk;if(body.length>1048576)throw Error('请求过大');}const data=JSON.parse(body||'{}');
   if(url.pathname==='/mode'){if(data.mode!==0&&data.mode!==1)throw Error('无效界面');wantedMode=data.mode;settings.mode=wantedMode;persist();reply(200,{ok:true});}
+  else if(url.pathname==='/layout'){if(data.layout!==0&&data.layout!==1)throw Error('无效歌词字号');if(connected&&!wire.layoutSupported)throw Error('当前屏幕固件不支持字号切换');settings.layout=data.layout;persist();reply(200,{ok:true});}
   else if(url.pathname==='/settings'){if(!Number.isInteger(data.offsetMs)||data.offsetMs< -10000||data.offsetMs>10000)throw Error('偏移超出范围');settings.offsetMs=data.offsetMs;persist();reply(200,{ok:true});}
   else if(url.pathname==='/retry'){music.retry();reply(200,{ok:true});}
   else if(url.pathname==='/lrc'){music.local(data.text);reply(200,{ok:true});}

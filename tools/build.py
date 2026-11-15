@@ -89,7 +89,7 @@ def build(a):
      gif.seek(i);require(gif.tile and gif.tile[0][1]==(0,0,320,172),'Lyrics requires complete cache GIF frames')
      color=gif.convert('RGB').getpixel((22,39));require(rgb565('#%02x%02x%02x'%color)!=rgb565(theme['background']),'Cache frame marker equals player background')
    linker=ROOT/'firmware/ips-lyrics/linker.ld';sources=[ROOT/'firmware/ips-lyrics/native_ui.c',ROOT/'firmware/ips/rtc.c',ROOT/'firmware/ips-lyrics/lyrics.c'];low,high=0x08080000,0x08088000
-   meta.update(variant='lyrics-v1',protocol='L6+LY1',requiredFlashKiB=1024,requiredSeries=13,codeStart=low,imageEnd=high,iapEraseEnd=0x080c0000,preservedSettings=[0x080fc000,0x080fe000,0x080ff800],fontSha256=digest(font),fontBodyCrc=crc,titleMaxGlyphs=96)
+   meta.update(variant='lyrics-v1',protocol='L6+LY1',requiredFlashKiB=1024,requiredSeries=13,codeStart=low,imageEnd=high,iapEraseEnd=0x080c0000,preservedSettings=[0x080fc000,0x080fe000,0x080ff800],fontSha256=digest(font),fontBodyCrc=crc,titleMaxGlyphs=96,renderSizes=[20,40],defaultLayout=1,fontReplacementProtocol='fixed-font-v1')
  else:
   require(a.isp_lib,'--isp-lib is required for main firmware');meta['isp']=isp_blob(Path(a.isp_lib).resolve(),out,clang)
   low=(0x2000+len(original)+15)&~15;high=0x49000;linker=out/'main.ld'

@@ -43,7 +43,7 @@ def headers(keys,theme,out):
  rows+=['};','static const u16 connection_icons[3][16]={']+[' {'+','.join(map(str,r))+'},' for r in ICONS]+['};']
  if offset!=1378:raise ValueError('Unexpected mask allocation')
  (out/'ui_assets.h').write_text('\n'.join(rows)+'\n',encoding='utf8')
- (out/'lyrics_theme.h').write_text('/* SPDX-License-Identifier: MIT */\n'+''.join(f'#define {k} {rgb565(v)}u\n' for k,v in [('INK',theme['ink']),('BG',theme['background']),('MUTED',theme.get('muted',theme['accent'])),('TRACK',theme['shell'])]),encoding='utf8')
+ (out/'lyrics_theme.h').write_text('/* SPDX-License-Identifier: MIT */\n'+''.join(f'#define {k} {rgb565(v)}u\n' for k,v in [('INK',theme['ink']),('BG',theme['background']),('MUTED',theme.get('muted',theme['accent'])),('TRACK',theme['shell']),('CARD',theme.get('lyricsBorder',theme['shell'])),('PAPER',theme.get('lyricsPanel',theme['panel'])),('ACCENT',theme['accent'])]),encoding='utf8')
 def base_frame(theme,phase=0):
  im=Image.new('RGB',(320,172),theme['background']);d=ImageDraw.Draw(im)
  d.rounded_rectangle((7,37,312,165),radius=16,fill=theme['shell'])

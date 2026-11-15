@@ -11,6 +11,16 @@ test('reconnect adopts the actual device mode and committed revision before swit
  const client={request:async(op,id,p)=>{if(op===24)return{status:0xa6,value:0x4c59};if(op===23){mode=p[0];return{status:1,value:id};}assert.equal(op,22);return{status:0xc0+id,value:({0:1,1:mode,2:0,3:42,4:0,5:crc&65535,6:crc>>>16,7:96})[id]};}};
  const link=new LyricLink(client,font);await link.ready();assert.equal(link.mode,1);assert.equal(link.revision,42);assert.equal(link.titleLimit,96);await link.setMode(0);assert.equal(mode,0);
 });
+
+test('20/40 layout discovery handles old firmware and switches without glyph upload',async()=>{
+ const {LyricLink}=require('../desktop/lyric-link.cjs'),font=fontFixture(),crc=validateFont(font).crc;
+ for(const supported of [false,true]){
+  let layout=1;const operations=[];const client={request:async(op,id,p)=>{operations.push(op);if(op===24)return{value:0x4c59};if(op===26){layout=p[0];return{value:id};}assert.equal(op,22);if(id===8&&!supported)throw Object.assign(Error('unsupported'),{status:5});return{value:({0:1,1:1,2:0,3:42,4:0,5:crc&65535,6:crc>>>16,7:96,8:layout})[id]};}};
+  const link=new LyricLink(client,font);await link.ready();assert.equal(link.layoutSupported,supported);assert.equal(link.mode,1);
+  if(supported){await link.setLayout(0);assert.equal(layout,0);await link.setLayout(1);assert.equal(layout,1);}else await assert.rejects(()=>link.setLayout(1),/不支持/);
+  await assert.rejects(()=>link.setLayout(2),/无效/);assert.equal(operations.some(op=>op===20||op===21),false);
+ }
+});
 test('USB adapter verifies descriptor before opening and pads report ID without accepting receivers',async()=>{
  const handle=new EventEmitter;let opened=0,closed=0,writes=[],ackId=0;
  handle.close=async()=>{closed++;};handle.write=async raw=>{writes.push(raw);assert.equal(raw.length,257);assert.equal(raw[0],0);const p=raw.slice(1);
@@ -25,6 +35,25 @@ test('font upload is explicit, verifies format, and writes only the FONT.BIN ass
  const {AppClient}=await import('../web/hid.mjs'),c=new AppClient({});const commands=[],packets=[],fontCrc=validateFont(fontFixture()).crc;c.request=async(op,id,p,accept)=>{if(op===24)return{status:0xa6,value:0x4c59};assert.equal(op,22);return{status:0xc0+id,value:id===5?fontCrc&65535:fontCrc>>>16};};c.control=async op=>commands.push(op);c.stock=async(sub,a,b,d,p)=>{packets.push({sub,a,b,p:Buffer.from(p)});return{status:0};};
  await assert.rejects(()=>c.uploadFont(fontFixture()),/确认/);const bad=fontFixture();bad[256]^=1;await assert.rejects(()=>c.uploadFont(bad,{replaceConfirmed:true}),/CRC/);assert.equal(commands.length,0);
  const font=fontFixture();await c.uploadFont(font,{replaceConfirmed:true});assert.deepEqual(commands,[2,5]);assert.equal(packets[0].p.subarray(0,11).toString(),'FONT    BIN');assert.deepEqual(Buffer.concat(packets.filter(p=>p.sub===2).map(p=>p.p)),font);assert.equal(packets.at(-1).sub,3);
+});
+
+test('font replacement validates the old pack and waits for a suspended fixed-file worker',async()=>{
+ const {AppClient}=await import('../web/hid.mjs'),{crc32}=require('../desktop/font.cjs'),font=fontFixture(),previous=Buffer.from(font),offset=previous.readUInt32LE(24);
+ previous[offset+2]^=1;previous.writeUInt32LE(crc32(previous.subarray(256)),36);previous.writeUInt32LE(0,40);previous.writeUInt32LE(crc32(previous.subarray(0,256)),40);const old=validateFont(previous),newCrc=validateFont(font).crc;
+ for(const outcome of ['success','wrong-old','missing-cap','wrong-new','timeout','begin-failure']){
+  const events=[];let now=0,queued=false,polls=0;const c=new AppClient({},{now:()=>now,pause:async ms=>{now+=ms;}});
+  c.request=async(op,id,p)=>{events.push({op,id,p});if(op===24)return{value:0x4c59};if(op===27){assert.equal(events.some(e=>e.control===2),true);assert.equal(Buffer.from(p).subarray(0,4).toString(),'FNT!');assert.equal(new DataView(p.buffer).getUint32(4,true),old.crc);assert.equal(new DataView(p.buffer).getUint32(8,true),previous.length);queued=true;return{status:0,value:id};}assert.equal(op,22);if(id===5)return{value:(outcome==='wrong-new'?newCrc^1:newCrc)&65535};if(id===6)return{value:newCrc>>>16};if(id===10)return{value:254};assert.equal(id,9);if(outcome==='missing-cap')throw Error('unsupported');return{value:!queued?0:outcome==='wrong-old'?7:outcome==='timeout'?2:++polls<3?2:1};};
+  c.control=async op=>events.push({control:op});c.stock=async(sub,a,b,d,p)=>{events.push({stock:sub,p});assert(queued&&polls>=3);if(outcome==='begin-failure'&&sub===1)throw Error('begin rejected');return{};};
+  const options={replaceConfirmed:true,replaceExisting:true,previousFont:previous};
+  if(outcome==='success'){await c.uploadFont(font,options);assert.equal(Buffer.from(events.find(e=>e.stock===1).p).subarray(0,11).toString(),'FONT    BIN');assert.equal(events.some(e=>e.stock===4),false);}
+  else await assert.rejects(()=>c.uploadFont(font,options),outcome==='wrong-old'?/旧字库不匹配/:outcome==='missing-cap'?/缺少/:outcome==='wrong-new'?/固件不匹配/:outcome==='timeout'?/超时/:/begin rejected/);
+  const changed=events.some(e=>e.control===2);assert.equal(changed,!['missing-cap','wrong-new'].includes(outcome));if(changed)assert.equal(events.at(-1).control,5);
+  if(!['success','begin-failure'].includes(outcome))assert.equal(events.some(e=>e.stock!==undefined),false);
+  if(outcome==='begin-failure')assert(events.some(e=>e.stock===4));
+ }
+ const c=new AppClient({});c.request=async()=>assert.fail('Invalid replacement reached device');
+ await assert.rejects(()=>c.uploadFont(font,{replaceConfirmed:true,replaceExisting:true}),/旧 FONT/);
+ const corrupt=Buffer.from(previous);corrupt[256]^=1;await assert.rejects(()=>c.uploadFont(font,{replaceConfirmed:true,replaceExisting:true,previousFont:corrupt}),/CRC/);
 });
 test('extended image requires a physical preflight and verifies every byte within Bank2 limits',async()=>{
  const {validateBuild,sha256}=await import('../web/protocol.mjs'),{FlashClient,AppClient}=await import('../web/hid.mjs');
@@ -48,6 +77,7 @@ test('offline console never opens hardware and persists offset, switches pages, 
   let s=await(await fetch(service.url+'/state')).json();assert(s.demo);assert.equal(s.connected,false);assert.equal(s.hotkey.ready,false);
   assert.equal((await post('/settings',{offsetMs:700})).status,200);assert.equal((await post('/settings',{offsetMs:10001})).status,400);assert.equal((await post('/settings',{offsetMs:0},{Origin:'https://unrelated.invalid'})).status,403);
   assert.equal((await post('/startup',{enabled:true})).status,400);await post('/mode',{mode:0});s=await(await fetch(service.url+'/state')).json();assert.equal(s.wantedMode,0);assert.equal(s.settings.offsetMs,700);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'background-settings.json'))).offsetMs,700);
+  assert.equal(s.settings.layout,1);assert.equal((await post('/layout',{layout:2})).status,400);assert.equal((await post('/layout',{layout:'1'})).status,400);assert.equal((await post('/layout',{layout:0})).status,200);s=await(await fetch(service.url+'/state')).json();assert.equal(s.settings.layout,0);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'background-settings.json'))).layout,0);
   const raw=Buffer.from(JSON.stringify({text:'[00:00]甲乙'})),split=raw.indexOf(Buffer.from('甲'))+1;
   const body=new ReadableStream({start(controller){controller.enqueue(raw.subarray(0,split));setTimeout(()=>{controller.enqueue(raw.subarray(split));controller.close();},10);}});
   assert.equal((await fetch(service.url+'/lrc',{method:'POST',headers:{'Content-Type':'application/json'},body,duplex:'half'})).status,200);s=await(await fetch(service.url+'/state')).json();assert.equal(s.frame.current,'甲乙');await post('/stop',{});

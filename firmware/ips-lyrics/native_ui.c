@@ -110,6 +110,7 @@ void rainy_hook_gui(void){if(!ui.active)((void(*)(void))0x0802dca9)();}
 void rainy_hook_misc(void){if(!ui.active)((void(*)(void))0x0805b031)();}
 void rainy_hook_image(void){
  u32 now=clock_ms();if(!ui.suspended)rtc_tick(now);
+ if(!LCD_BUSY)lyrics_maintenance(ui.suspended);
  if(!ui.suspended&&!LCD_BUSY&&lyrics_tick(now))ui.dirty=1;
  if(UI_IDLE_MS&&ui.key&&(u32)(now-ui.key_at)>=UI_IDLE_MS){ui.key=0;ui.key_dirty=1;}
  if(!ui.active){((void(*)(void))0x0805b245)();return;}
@@ -128,9 +129,10 @@ void rainy_hook_ips(const u8 *p,u16 n){
  if(rtc_receive(p,n,clock_ms()))return;
  if(p[3]!=13){if(ui.active&&p[3]!=10&&p[3]!=11){ack(FORMAT,0);return;}((void(*)(const u8*,u16))0x080596ad)(p,n);return;}
  if(!valid(p,n)){ack(FORMAT,0);return;}seq=(u16)(p[5]|(p[6]<<8));op=p[4];
+ if(op==27&&!ui.suspended){ack(BUSY,seq);return;}
  {u16 value;if(lyrics_request(p,n,&status,&value)){ack(status,value);return;}}
  if(op==0&&n==11){ack(0xa5,0x364c);return;}
- if((op==2||op==5)&&n==11){if(LCD_BUSY||(op==2&&!lyrics_suspend())){ack(BUSY,seq);return;}ui.suspended=op==2;ui.active=0;ui.has_surface=0;ack(DONE,seq);return;}
+ if((op==2||op==5)&&n==11){if(LCD_BUSY||(op==2&&!lyrics_suspend())){ack(BUSY,seq);return;}if(op==5)lyrics_cancel_maintenance();ui.suspended=op==2;ui.active=0;ui.has_surface=0;ack(DONE,seq);return;}
  if(op==12&&n==18){ack(rtc_schedule(p+8,seq,clock_ms()),seq);return;}
  if(op==11&&n==11){
   switch(seq){case 0:v=0x5536;break;case 1:v=ui.key;break;case 2:v=ui.known?(ui.battery|(ui.charge<<8)):0xffff;break;case 3:v=ui.known?ui.mode:0xffff;break;case 4:v=rtc_state();break;case 5:v=rtc_value()&65535u;break;case 6:v=rtc_value()>>16;break;case 7:v=ui.active;break;case 8:v=ui.modifiers;break;case 14:v=*(volatile u16*)0x1ffff7e0u;break;case 15:v=*(volatile u8*)0x1ffff7f3u;break;default:ack(RANGE,seq);return;}

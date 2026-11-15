@@ -81,18 +81,31 @@ export class AppClient{
    await this.stock(3,0,0,0,[crc&255,crc>>>8]);ok=true;
   }finally{if(!ok)try{await this.stock(4);}catch{}await this.control(5);}
  }
- async uploadFont(bytes,{replaceConfirmed=false,progress=()=>{}}={}){
+ async uploadFont(bytes,{replaceConfirmed=false,replaceExisting=false,previousFont,progress=()=>{}}={}){
   if(!replaceConfirmed)throw Error('请先确认写入或替换 FONT.BIN');const font=validateFont(bytes);
+  if(replaceExisting&&!previousFont)throw Error('替换需要当前屏内版本的旧 FONT.BIN');
+  if(!replaceExisting&&previousFont)throw Error('请明确选择替换已有字库');
+  const previous=replaceExisting?validateFont(previousFont):null;
   await this.request(24,1,[],a=>a.status===0xa6&&a.value===0x4c59);
   const low=(await this.request(22,5,[],a=>a.status===0xc5)).value,high=(await this.request(22,6,[],a=>a.status===0xc6)).value;
   if(high*65536+low!==font.bodyCrc)throw Error('字库与屏幕固件不匹配，未写入');
+  const query=async field=>(await this.request(22,field,[],a=>a.status===0xc0+field)).value;
+  if(previous)try{await query(9);}catch{throw Error('当前歌词固件缺少字库替换接口，请先更新固件');}
   const crc=crc16(bytes),begin=new Uint8Array(17);begin.set(new TextEncoder().encode('FONT    BIN'));new DataView(begin.buffer).setUint32(11,bytes.length,true);new DataView(begin.buffer).setUint16(15,crc,true);
-  await this.control(2);let ok=false;
+  let ok=false,suspended=false,started=false;
   try{
+   await this.control(2);suspended=true;
+   if(previous){
+    const p=new Uint8Array(12),v=new DataView(p.buffer);p.set(new TextEncoder().encode('FNT!'));v.setUint32(4,previous.bodyCrc,true);v.setUint32(8,previous.bytes,true);const id=++this.seq&65535;
+    await this.request(27,id,p,a=>a.status===0&&a.value===id);
+    const start=this.now();let state;while((state=await query(9))===2){if(this.now()-start>8000)throw Error('字库替换工作线程超时');await this.pause(25);}
+    if(state!==1){const result=await query(10);throw Error(result===254?'旧字库不匹配，未替换':'字库替换失败，文件系统状态 '+result);}
+   }
+   started=true;
    await this.stock(1,0,0,0,begin);
    for(let offset=0,seq=0;offset<bytes.length;offset+=232,seq++){await this.stock(2,seq&255,seq>>>8,0,bytes.subarray(offset,offset+232));progress(Math.min(1,(offset+232)/bytes.length));}
    await this.stock(3,0,0,0,[crc&255,crc>>>8]);ok=true;
-  }finally{if(!ok)try{await this.stock(4);}catch{}await this.control(5);}
+  }finally{if(started&&!ok)try{await this.stock(4);}catch{}if(suspended)await this.control(5);}
  }
  async enterIap(target){const t=TARGETS[target];if(!t)throw Error('Unknown target');await this.io.send(new Uint8Array(t.boot));await this.close();}
 }

@@ -17,7 +17,7 @@ def main():
  _,_,_,symbols,_=elf((folder/'module.elf').read_bytes());data=(folder/'FONT.BIN').read_bytes();font=Font20(data)
  u=Uc(UC_ARCH_ARM,UC_MODE_THUMB|UC_MODE_MCLASS);u.mem_map(0x08000000,0x100000);u.mem_write(0x08004000,image);u.mem_map(0x20000000,0x60000);u.mem_map(0x1ffff000,0x1000);u.mem_map(0x40000000,0x40000)
  surface,object_at,stack,stop=0x20010000,0x20006000,0x2005e000,0x08001000
- allocs={};files={};ctx={'now':1000,'reads':0,'fail':False,'uart':[]}
+ allocs={};files={};ctx={'now':1000,'reads':0,'fail':False,'uart':[],'unlinks':0}
  def put(at,v,n=4):u.mem_write(at,int(v).to_bytes(n,'little'))
  def get(at,n=4):return int.from_bytes(u.mem_read(at,n),'little')
  def ret(v=0):u.reg_write(UC_ARM_REG_R0,v);u.reg_write(UC_ARM_REG_PC,u.reg_read(UC_ARM_REG_LR))
@@ -38,9 +38,10 @@ def main():
   elif at==0x0803ccc8:
    assert r0 in files and not get(0x20001c6c);assert r2 in [52,256];chunk=data[files[r0]:files[r0]+r2];u.mem_write(r1,chunk);put(r3,len(chunk));files[r0]+=len(chunk);ctx['reads']+=1;ret()
   elif at==0x0803d074:assert r0 in files;del files[r0];ret()
+  elif at==0x0803dd04:assert bytes(u.mem_read(r0,9))==b'FONT.BIN\0' and not files and not get(0x20001c6c);ctx['unlinks']+=1;ret()
   elif at==0x0805d6f2:put(0x20001c6c,1);ret()
   else:ret() # Original GUI/callback bodies are external to this unit model.
- for at in [0x0803a2ba,0x08025c08,0x0802ab34,0x0803c804,0x0803d098,0x0803ccc8,0x0803d074,0x0805d6f2,0x0807a600,0x0805ac72,0x0805ae0a,0x0805b244,0x0802dca8,0x0805b030]:u.hook_add(UC_HOOK_CODE,code,begin=at,end=at)
+ for at in [0x0803a2ba,0x08025c08,0x0802ab34,0x0803c804,0x0803d098,0x0803ccc8,0x0803d074,0x0803dd04,0x0805d6f2,0x0807a600,0x0805ac72,0x0805ae0a,0x0805b244,0x0802dca8,0x0805b030]:u.hook_add(UC_HOOK_CODE,code,begin=at,end=at)
  def write(cpu,access,address,size,value,_):
   assert not 0x40023c00<=address<0x40023d00,'Unexpected Flash-controller write'
   if address==0x40004c04:ctx['uart'].append(value&255)
@@ -75,9 +76,8 @@ def main():
  u.mem_write(surface,bytes(rgb));call('rainy_hook_native_status',84,0,1);u.mem_write(0x20000100,bytes([0xbe,0x1a,8,13,0x8c,34,56,0xed]));call('rainy_hook_ips',0x20000100,8);draw()
  call('rainy_hook_native_key',46,0,0);draw();plain=bytes(u.mem_read(surface,110080));call('rainy_hook_native_key',46,0,1);draw();shifted=bytes(u.mem_read(surface,110080));assert plain!=shifted
  assert request(24,1)==(0xa6,0x4c59);tick();assert q(0)==1 and q(7)==96
+ assert q(8)==1;assert request(26,9,b'\0')==(1,9);assert q(8)==0
  stage(10,'雨后的像素电台','把小小的屏幕点亮','文字跟着旋律慢慢滚动');assert request(23,11,b'\1')==(1,11);draw();assert q(1)==1
- if a.preview:
-  values=struct.unpack('<55040H',bytes(u.mem_read(surface,110080)));im=Image.new('RGB',(320,172));im.putdata([(((v>>11)&31)*255//31,((v>>5)&63)*255//63,(v&31)*255//31)for v in values]);a.preview.parent.mkdir(parents=True,exist_ok=True);im.resize((960,516),Image.Resampling.NEAREST).save(a.preview)
  reads=ctx['reads'];stage(12,'雨后的像素电台','文字跟着旋律慢慢滚动','新句');assert ctx['reads']-reads==4
  long='标题超过十六个字仍需独立滚动且不被歌词换句打断';stage(13,long,'当前句','下一句');draw();initial=bytes(u.mem_read(surface+51*640,20*640))
  for _ in range(90):tick(33)
@@ -87,10 +87,41 @@ def main():
   ids=[font.lookup.get(ord(c),font.fallback)for c in text];assert request(20,16,bytes([k,len(ids)])+struct.pack('<'+'H'*len(ids),*ids))==(1,16)
  assert request(21,16,struct.pack('<IIB',0,0,0))==(0,16);tick();assert q(3)==14 and q(2)!=0 and allocs==old;ctx['fail']=False
  stage(17,'甲乙丙丁'*24,'繁體簡體'*24,'日本語歌'*24);assert not q(2)
+ stage(30,'雨后的像素电台','把小小的屏幕点亮','文字跟着旋律慢慢滚动');tick(300);draw()
+ if a.preview:
+  values=struct.unpack('<55040H',bytes(u.mem_read(surface,110080)));im=Image.new('RGB',(320,172));im.putdata([(((v>>11)&31)*255//31,((v>>5)&63)*255//63,(v&31)*255//31)for v in values]);a.preview.parent.mkdir(parents=True,exist_ok=True);im.resize((960,516),Image.Resampling.NEAREST).save(a.preview.with_name(a.preview.stem+'-20'+a.preview.suffix))
+ reads=ctx['reads'];old=dict(allocs);assert request(26,31,b'\1')==(1,31);assert q(8)==1 and allocs==old and ctx['reads']==reads
+ stage(32,'晚风与星光','星光','这行不显示');tick(300);draw();caption=bytes(u.mem_read(surface,110080));ink=rgb565(theme['ink']);bg=rgb565(theme['background'])
+ expected=set()
+ for text,scale,y0,field,x0 in [('晚风与星光',1,43,286,17),('星光',2,90,288,16)]:
+  x0+=(field-sum(font.glyph(ch)[0]*scale for ch in text))//2
+  for ch in text:
+   advance,bits=font.glyph(ch)
+   for yy in range(20):
+    for xx in range(advance):
+     bit=yy*20+xx
+     if bits[bit>>3]&(128>>(bit&7)):
+      for dy in range(scale):
+       for dx in range(scale):expected.add((x0+xx*scale+dx,y0+yy*scale+dy))
+   x0+=advance*scale
+ def color(raw,x,y):return int.from_bytes(raw[(y*320+x)*2:(y*320+x)*2+2],'little')
+ for y0,y1 in [(43,63),(78,143)]:
+  for y in range(y0,y1):
+   for x in range(16,304):assert (color(caption,x,y)==ink)==((x,y)in expected)
+ assert color(caption,22,39)==bg
+ assert request(26,33,b'\2')==(5,33) and q(8)==1
+ if a.preview:
+  stage(34,'雨后的像素电台','星光正好','下一句');tick(300);draw();values=struct.unpack('<55040H',bytes(u.mem_read(surface,110080)));im=Image.new('RGB',(320,172));im.putdata([(((v>>11)&31)*255//31,((v>>5)&63)*255//63,(v&31)*255//31)for v in values]);im.resize((960,516),Image.Resampling.NEAREST).save(a.preview)
  put(0x20001c6c,1);before=bytes(u.mem_read(surface,110080));reads=ctx['reads'];ctx['now']+=100;call('rainy_hook_image');assert before==bytes(u.mem_read(surface,110080))and ctx['reads']==reads;finish()
  assert request(23,18,b'\0')==(1,18);u.mem_write(surface,bytes(rgb));draw();assert q(1)==0
  call('rainy_hook_native_key',4,0,0);draw();tick(20000);assert request(11,1)==(0xb1,4)
+ removal=b'FNT!'+struct.pack('<II',struct.unpack_from('<I',data,36)[0],len(data));assert request(27,50,removal)==(2,50) and ctx['unlinks']==0
  assert request(2,19)==(2,19);tick();assert request(2,19)==(1,19);assert not allocs and not files
- report={'passed':True,'physicalHardwareAccessed':False,'sha256':manifest['sha256'],'checks':['read-only silicon queries','native shift symbol and retained key','R75F/2 initialization and independent 96-char title','cached title/next reuse and four-read GUI budget','allocation failure preserves live ownership','maximum three fields','DMA busy leaves pixels and file IO untouched','mode return and upload suspend release all allocations'],'limits':['Original callback bodies/FatFs/allocator/LCD/UART are modeled','Not physical input latency, scanout, recovery or full original startup verification']}
+ bad=bytearray(removal);bad[4]^=1;assert request(27,51,bytes(bad))==(0,51);assert ctx['unlinks']==0;tick();assert q(9)==7 and q(10)==254 and ctx['unlinks']==0 and not allocs and not files
+ assert request(27,53,removal)==(0,53);assert request(5,54)==(1,54);tick();assert q(9)==7 and q(10)==253 and ctx['unlinks']==0
+ assert request(2,55)==(1,55)
+ assert request(27,52,removal)==(0,52);assert q(9)==2 and ctx['unlinks']==0
+ put(0x20001c6c,1);reads=ctx['reads'];call('rainy_hook_image');assert ctx['reads']==reads and ctx['unlinks']==0;finish();tick();assert q(9)==1 and q(10)==0 and ctx['unlinks']==1 and not allocs and not files
+ report={'passed':True,'physicalHardwareAccessed':False,'sha256':manifest['sha256'],'checks':['read-only silicon queries','native shift symbol and retained key','R75F/2 initialization and independent 96-char title','cached title/next reuse and four-read GUI budget','allocation failure preserves live ownership','maximum three fields','DMA busy leaves pixels and file IO untouched','mode return and upload suspend release all allocations','simultaneous bit-exact 20px title and 40px caption','OP26 layout switch allocates and reads no glyphs','OP27 fixed FONT guard, no UART IO, close before unlink, DMA deferral','mismatched old header is preserved; resume cancels queued replacement'],'limits':['Original callback bodies/FatFs/allocator/LCD/UART are modeled','Not physical input latency, scanout, recovery or full original startup verification']}
  (folder/'model-validation.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf8');print(json.dumps(report))
 if __name__=='__main__':main()
