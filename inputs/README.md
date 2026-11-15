@@ -1,7 +1,10 @@
-# 仅本地输入
+# 本地输入文件目录
 
-将合法取得的匹配原厂 APP 与需要的 SDK archive 放在这里。目录中除本文件外的内容已加入 `.gitignore`。
+这个目录用来放本地编译固件所需的第三方原厂输入文件。除本说明外，`.gitignore` 已自动屏蔽该目录下的所有文件，不用担心误提交。
 
-预期文件名为 `ips-stock.bin`、`main-stock.bin`、`libISP585.a`。文件名不能代替哈希与来源检查，完整约束见 [构建文档](../docs/build.md)。
+你需要自行准备并放入以下文件（具体获取方式与 SHA-256 校验值请看 [本地构建指南](../docs/build.md)）：
 
-请勿提交或公开这些第三方文件，也不要把构建结果中含有的第三方内容重新声明为 MIT。
+- `ips-stock.bin` — 原厂屏幕固件（可用 `tools/extract_stock.py` 从官方烧录 HTML 提取）
+- `main-stock.bin` — 原厂键盘主控固件（同上）
+- `libISP585.a` — WCH CH585 官方 SDK 的 Flash 操作静态库（编译主控固件时需要）
+- `NotoSansCJKsc-Regular.otf` — 思源黑体（只有启用可选歌词扩展生成 `FONT.BIN` 时才需要）
