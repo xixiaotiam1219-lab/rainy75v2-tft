@@ -2,6 +2,7 @@
 import {VID,APP_PID,MAIN_CAP,IPS_CAP,ACK_READ,parseAck,command,frame,crc16,localSeconds,timeDifference,decodeTime,validateGif,TARGETS} from './protocol.mjs';
 import {validateFont} from './font.mjs';
 export const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function abortIfRequested(signal){if(signal?.aborted){const error=new Error('显示传输已取消');error.name='AbortError';throw error;}}
 export function reportLength(reports,length){return reports?.some(r=>r.reportId===0&&r.items.reduce((n,i)=>n+i.reportSize*i.reportCount,0)/8===length);}
 export function validDevice(device,pid,length){return device?.vendorId===VID&&device.productId===pid&&device.collections?.some(c=>c.usagePage===0xff60&&c.usage===0x61&&reportLength(c.outputReports,length)&&reportLength(c.inputReports,length));}
 export class HidIO{
@@ -12,15 +13,17 @@ export class HidIO{
   if(!d.opened)await d.open();return new HidIO(d,length);
  }
  async send(bytes){if(bytes.length>this.length)throw Error('Report too large');const p=new Uint8Array(this.length);p.set(bytes);await this.device.sendReport(0,p);}
- async exchange(bytes,match,timeout=2500,minLength=this.length){
-  if(this.pending)throw Error('Another exchange is pending');this.pending=true;let handler,timer;
+ async exchange(bytes,match,timeout=2500,minLength=this.length,{signal}={}){
+  if(this.pending)throw Error('Another exchange is pending');this.pending=true;let handler,timer,onAbort,sending;
   try{
+   abortIfRequested(signal);
    const reply=new Promise((resolve,reject)=>{
     handler=e=>{if(e.reportId!==0||e.data.byteLength<minLength||e.data.byteLength>this.length)return;const p=new Uint8Array(e.data.buffer,e.data.byteOffset,e.data.byteLength);if(match(p))resolve(new Uint8Array(p));};
     this.device.addEventListener('inputreport',handler);timer=setTimeout(()=>reject(Error('设备应答超时')),timeout);
+    if(signal){onAbort=()=>{try{abortIfRequested(signal);}catch(e){reject(e);}};signal.addEventListener('abort',onAbort,{once:true});}
    });
-   const [,result]=await Promise.all([this.send(bytes),reply]);return result;
-  }finally{clearTimeout(timer);if(handler)this.device.removeEventListener('inputreport',handler);this.pending=false;}
+   sending=this.send(bytes);const [,result]=await Promise.all([sending,reply]);return result;
+  }finally{clearTimeout(timer);if(onAbort)signal.removeEventListener('abort',onAbort);if(handler)this.device.removeEventListener('inputreport',handler);if(sending)await sending.catch(()=>{});this.pending=false;}
  }
  async close(){if(this.device.opened)await this.device.close();}
 }
@@ -28,18 +31,21 @@ export class AppClient{
  constructor(io,{pause=wait,now=Date.now}={}){this.io=io;this.pause=pause;this.now=now;this.seq=Date.now()&65535;}
  static async connect(){return new AppClient(await HidIO.choose(APP_PID,256));}
  async close(){await this.io.close();}
- async ack(){return parseAck(await this.io.exchange(ACK_READ,p=>p[0]===0xbe&&p[1]===0xe4&&p[3]===0x84));}
- async sendAwait(packet,accept,timeout=8000,pollMs=15){
-  await this.io.send(packet);const start=this.now();let last;
-  while(this.now()-start<timeout){last=await this.ack();if(accept(last))return last;await this.pause(pollMs);}
+ async ack({signal}={}){return parseAck(await this.io.exchange(ACK_READ,p=>p[0]===0xbe&&p[1]===0xe4&&p[3]===0x84,2500,undefined,{signal}));}
+ async sendAwait(packet,accept,timeout=8000,pollMs=15,{signal,retryMs=0}={}){
+  abortIfRequested(signal);
+  await this.io.send(packet);const start=this.now();let last,lastSent=start;
+  while(this.now()-start<timeout){abortIfRequested(signal);last=await this.ack({signal});abortIfRequested(signal);if(accept(last))return last;if(retryMs&&this.now()-lastSent>=retryMs){await this.io.send(packet);lastSent=this.now();}await this.pause(pollMs);}
   throw Error('指令应答超时：'+JSON.stringify(last));
  }
- async request(op,id=0,payload=[],test=a=>a.status===1&&a.value===id,{pollMs=15}={}){
+ async request(op,id=0,payload=[],test=a=>a.status===1&&a.value===id,{pollMs=15,signal,retryMs=0}={}){
   if(!Number.isInteger(pollMs)||pollMs<2||pollMs>100)throw Error('无效查询间隔');
+  if(retryMs&&(![22,23,26,29].includes(op)||!Number.isInteger(retryMs)||retryMs<100||retryMs>1000))throw Error('仅允许显示查询或幂等界面设置重试');
+  const pending={op,id,startedAt:Date.now()};this.currentRequest=pending;let outcome='done';
   return this.sendAwait(command(op,id,payload),a=>{
    if(a.sub!==13)return false;if(test(a))return true;
    if(a.value===id&&a.status>=2&&a.status<=7)throw Object.assign(Error('设备拒绝指令，状态 '+a.status),{status:a.status});return false;
-  },8000,pollMs).catch(e=>{throw Object.assign(new Error('OP'+op+' / ID'+id+'：'+e.message),{status:e.status,cause:e});});
+  },8000,pollMs,{signal,retryMs}).catch(e=>{outcome=e.name==='AbortError'?'cancelled':'error';if(e.name==='AbortError')throw e;throw Object.assign(new Error('OP'+op+' / ID'+id+'：'+e.message),{status:e.status,cause:e});}).finally(()=>{const elapsedMs=Date.now()-pending.startedAt;if(elapsedMs>=200)this.lastSlowRequest={...pending,elapsedMs,outcome};if(this.currentRequest===pending)this.currentRequest=null;});
  }
  async queryMain(f){return (await this.request(15,f,[],a=>a.status===0xd0+f)).value;}
  async queryIps(f){return (await this.request(11,f,[],a=>a.status===0xb0+f)).value;}

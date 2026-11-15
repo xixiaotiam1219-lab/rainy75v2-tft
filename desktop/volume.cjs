@@ -18,16 +18,16 @@ class Volume{
 // HTTP handlers mutate settings/events; they never send device packets.
 class VolumeDispatcher{
  constructor(source,{clock=Date.now}={}){this.source=source;this.clock=clock;this.link=null;this.signature='';this.version=0;this.lastAt=-Infinity;this.error=null;}
- async pump(link,settings){
+ async pump(link,settings,{signal}={}){
   const e=this.source.event;if(!link?.volumeSupported){this.version=e?.version||0;return;}
   const signature=JSON.stringify([settings.volumeEnabled,settings.volumeScope,settings.volumeStyle,settings.volumeHoldMs,link.mode,link.layout]);
   try{
-   if(this.link!==link||this.signature!==signature){if(this.link!==link)this.version=e?.version||0;this.link=link;this.signature=signature;await link.setVolume(null);this.error=null;}
+   if(this.link!==link||this.signature!==signature){if(this.link!==link)this.version=e?.version||0;this.link=link;this.signature=signature;await link.setVolume(null,{signal});this.error=null;}
    if(!e||e.version<=this.version)return;
    if(!settings.volumeEnabled||!settings.volumeScope&&!(link.mode===1&&link.layout===4)||this.clock()-e.at>2000){this.version=e.version;return;}
    if(this.clock()-this.lastAt<80)return;
-   this.lastAt=this.clock();this.version=e.version;await link.setVolume(e,{scope:settings.volumeScope,style:settings.volumeStyle,holdMs:settings.volumeHoldMs});this.error=null;
-  }catch(err){this.error='音量提示：'+err.message;this.version=e?.version||0;}
+   this.lastAt=this.clock();this.version=e.version;await link.setVolume(e,{scope:settings.volumeScope,style:settings.volumeStyle,holdMs:settings.volumeHoldMs,signal});this.error=null;
+  }catch(err){if(err.name==='AbortError'){this.signature='';return;}this.error='音量提示：'+err.message;this.version=e?.version||0;}
  }
 }
 module.exports={Volume,VolumeDispatcher};

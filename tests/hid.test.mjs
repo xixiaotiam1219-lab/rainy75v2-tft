@@ -25,3 +25,23 @@ test('asset commands wait past 255 and ignore an old DATA sequence',async()=>{
  const client=new AppClient({send:async()=>{}},{now:()=>now,pause:async ms=>{now+=ms;}});client.ack=async()=>{reads++;return replies.shift();};
  assert.equal((await client.stock(2,7,0,0,[1])).value,7);assert.equal(reads,3);
 });
+
+test('cancelling a silent HID read releases listeners but waits for its USB write before another exchange',async()=>{
+ const listeners=new Set;let finishWrite;const signal=new AbortController;
+ const d={sendReport:()=>new Promise(resolve=>{finishWrite=resolve;}),addEventListener:(_,f)=>listeners.add(f),removeEventListener:(_,f)=>listeners.delete(f)};
+ const io=new HidIO(d,256),pending=io.exchange(ACK_READ,()=>true,2500,undefined,{signal:signal.signal});const rejected=assert.rejects(pending,{name:'AbortError'});
+ signal.abort();await new Promise(resolve=>setImmediate(resolve));assert.equal(listeners.size,0);assert.equal(io.pending,true);
+ await assert.rejects(()=>io.exchange(ACK_READ,()=>true),/Another exchange/);finishWrite();await rejected;assert.equal(io.pending,false);
+});
+
+test('an already-cancelled display request sends no packet or acknowledgement read',async()=>{
+ const controller=new AbortController;controller.abort();const c=new AppClient({send:async()=>assert.fail('Cancelled request wrote to USB'),exchange:async()=>assert.fail('Cancelled request read from USB')});
+ await assert.rejects(()=>c.request(28,42,[3,0,0],undefined,{signal:controller.signal}),{name:'AbortError'});
+});
+
+test('only idempotent display settings or queries can retry a dropped packet',async()=>{
+ let now=0,sends=0;const c=new AppClient({send:async()=>{sends++;}},{now:()=>now,pause:async ms=>{now+=ms;}});c.ack=async()=>({sub:13,status:sends>=2?1:255,value:sends>=2?10:0});
+ await c.request(23,10,[0],undefined,{retryMs:150});assert.equal(sends,2);assert(now>=150&&now<1000);
+ for(const op of [18,20,21,25,27,28,30])await assert.rejects(()=>c.request(op,11,[],undefined,{retryMs:150}),/仅允许/);
+ assert.equal(sends,2);await assert.rejects(()=>c.request(23,11,[0],undefined,{retryMs:99}),/仅允许/);
+});

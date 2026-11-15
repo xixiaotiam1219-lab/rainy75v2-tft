@@ -35,6 +35,11 @@ test('OP30 is six bounded bytes; rejects old firmware and never uploads assets',
  for(const o of [{scope:2},{style:2},{holdMs:399},{holdMs:3001}])await assert.rejects(()=>l.setVolume({level:20,muted:false},o),/无效/);
  l.volumeSupported=false;await assert.rejects(()=>l.setVolume(null),/不支持/);assert.equal(sent.length,2);
 });
+test('a screen change can cancel a stuck volume clear and retry it without reporting a volume fault',async()=>{
+ const v=new Volume,d=new VolumeDispatcher(v),cancel=new AbortController;let calls=0;
+ const link={volumeSupported:true,mode:1,layout:4,async setVolume(e,{signal}={}){calls++;if(calls===1){cancel.abort();signal.throwIfAborted();}}},s={volumeEnabled:true,volumeScope:0,volumeStyle:0,volumeHoldMs:1000};
+ await d.pump(link,s,{signal:cancel.signal});assert.equal(d.error,null);await d.pump(link,s);assert.equal(calls,2);assert.equal(d.error,null);
+});
 test('cover yields insert volume into the same serial request stream without corrupting cover chunks',async()=>{
  const {packCover,palette}=require('../desktop/cover.cjs');
  const log=[],l=Object.create(LyricLink.prototype);let busy=false;

@@ -13,7 +13,7 @@ public static class RainyLyricsToggle {
  [DllImport("user32.dll")] static extern int GetMessage(out MSG m,IntPtr w,uint a,uint b);
  public static void Run(){
   if(!RegisterHotKey(IntPtr.Zero,24577,0x4002,0x77)){Console.WriteLine("{\"event\":\"error\",\"message\":\"Ctrl+F8 is already registered\"}");Console.Out.Flush();return;}
-  try{Console.WriteLine("{\"event\":\"ready\",\"shortcut\":\"Ctrl+F8\"}");Console.Out.Flush();MSG msg;while(GetMessage(out msg,IntPtr.Zero,0,0)>0){if(msg.Message==0x312&&msg.W.ToUInt64()==24577){Console.WriteLine("{\"event\":\"toggle\"}");Console.Out.Flush();}}}
+  try{Console.WriteLine("{\"event\":\"ready\",\"shortcut\":\"Ctrl+F8\"}");Console.Out.Flush();MSG msg;while(GetMessage(out msg,IntPtr.Zero,0,0)>0){if(msg.Message==0x312&&msg.W.ToUInt64()==24577){long at=(DateTime.UtcNow.Ticks-621355968000000000L)/10000L;uint queue=unchecked((uint)Environment.TickCount-msg.Time);Console.WriteLine("{\"event\":\"toggle\",\"at\":"+at+",\"queueMs\":"+queue+"}");Console.Out.Flush();}}}
   finally{UnregisterHotKey(IntPtr.Zero,24577);}
  }
 }
