@@ -1,7 +1,7 @@
 """Generate editable UI headers and original robot GIFs. SPDX-License-Identifier: MIT."""
 import argparse,json
 from pathlib import Path
-from PIL import Image,ImageDraw
+from PIL import Image,ImageDraw,GifImagePlugin
 
 ROOT=Path(__file__).resolve().parents[1]
 REGIONS=[(40,57,120,76),(16,13,94,14),(233,12,16,16),(264,17,20,8),(287,17,23,7)]
@@ -88,13 +88,38 @@ def preview_frame(theme,keys,key=227):
   for xx,cell in enumerate(row):
    if cell=='1':d.rectangle((x+xx*6,y+yy*6,x+xx*6+5,y+yy*6+5),fill=theme['ink'])
  return im
+
+def save_cache_gif(frames,path):
+ # Keep the previous surface while the native decoder prepares the next frame.
+ # Image.save(disposal=1) crops later frames even with optimize=False. Encode
+ # each image explicitly so every frame also restores the lyrics marker.
+ indexed=[frame.quantize(colors=256) for frame in frames]
+ header,_=GifImagePlugin.getheader(indexed[0],info={'loop':0})
+ with Path(path).open('wb') as output:
+  for block in header:output.write(block)
+  for i,frame in enumerate(indexed):
+   for block in GifImagePlugin.getdata(frame,duration=120,disposal=1,include_color_table=i>0):output.write(block)
+  output.write(b';')
+
+def validate_cache_gif(path,theme):
+ bg=rgb565(theme['background'])
+ with Image.open(path) as gif:
+  if gif.size!=(320,172):raise ValueError('Cache GIF must be 320x172')
+  for i in range(gif.n_frames):
+   gif.seek(i)
+   if not gif.tile or gif.tile[0][1]!=(0,0,320,172):raise ValueError('Cache GIF requires complete frames')
+   if gif.disposal_method!=1:raise ValueError('Cache GIF must retain the previous frame (disposal=1)')
+   if 'transparency' in gif.info:raise ValueError('Cache GIF frames must be opaque')
+   color=gif.convert('RGB').getpixel((22,39))
+   if rgb565('#%02x%02x%02x'%color)==bg:raise ValueError('Cache frame marker equals player background')
 def generate(keys_path,theme_name,out,header_dir=None):
  keys=validate_keys(load(keys_path));themes=load(ROOT/'profiles/themes.json')
  if theme_name not in themes:raise ValueError('Unknown theme')
  theme=themes[theme_name];out=Path(out);out.mkdir(parents=True,exist_ok=True)
  if header_dir:headers(keys,theme,Path(header_dir))
  frames=[base_frame(theme,i) for i in range(8)]
- frames[0].save(out/f'robot-{theme_name}.gif',save_all=True,append_images=frames[1:],duration=125,loop=0,disposal=2,optimize=False)
+ save_cache_gif(frames,out/f'robot-{theme_name}.gif')
+ validate_cache_gif(out/f'robot-{theme_name}.gif',theme)
  preview_frame(theme,keys).save(out/f'preview-{theme_name}.png')
  return out/f'robot-{theme_name}.gif'
 if __name__=='__main__':

@@ -1,7 +1,7 @@
 """Strict, local-input-only firmware patch builder. SPDX-License-Identifier: MIT."""
 import argparse,hashlib,json,os,shutil,struct,subprocess
 from pathlib import Path
-from assets import generate,ROOT
+from assets import generate,ROOT,validate_cache_gif
 
 IPS_SHA='32defab7902e57eb972a577fc6cbf3a7e57bc772d59b99f11038370412b77f41'
 MAIN_SHA='bc575a6d7b19042048705248715a43a67a23c7f217ba0ac464c539a390f4d23b'
@@ -73,7 +73,6 @@ def build(a):
   flags=['--target=arm-none-eabi','-mcpu=cortex-m4','-mthumb','-mfloat-abi=soft'];low,high=0x0807ec90,0x08080000
   if a.lyrics:
    from fontpack import Font20
-   from PIL import Image
    require(a.font,'--font is required with --lyrics');font=Path(a.font).read_bytes();pack=Font20(font)
    require(len(font)<=4194304,'Font exceeds the supported external storage capacity')
    (out/'FONT.BIN').write_bytes(font)
@@ -82,12 +81,9 @@ def build(a):
     if notice.resolve()!=(out/name).resolve():shutil.copy2(notice,out/name)
    count,index,offset,fallback,total,crc,hcrc=struct.unpack_from('<7I',font,16)
    (out/'lyrics_font_config.h').write_text(f'#define FONT_COUNT {count}u\n#define FONT_DATA_OFFSET {offset}u\n#define FONT_TOTAL_BYTES {total}u\n#define FONT_BODY_CRC {crc}u\n',encoding='utf8')
-   from assets import load,rgb565
+   from assets import load
    theme=load(ROOT/'profiles/themes.json')[a.theme]
-   with Image.open(out/'assets'/f'robot-{a.theme}.gif') as gif:
-    for i in range(gif.n_frames):
-     gif.seek(i);require(gif.tile and gif.tile[0][1]==(0,0,320,172),'Lyrics requires complete cache GIF frames')
-     color=gif.convert('RGB').getpixel((22,39));require(rgb565('#%02x%02x%02x'%color)!=rgb565(theme['background']),'Cache frame marker equals player background')
+   validate_cache_gif(out/'assets'/f'robot-{a.theme}.gif',theme)
    linker=ROOT/'firmware/ips-lyrics/linker.ld';sources=[ROOT/'firmware/ips-lyrics/native_ui.c',ROOT/'firmware/ips/rtc.c',ROOT/'firmware/ips-lyrics/lyrics.c'];low,high=0x08080000,0x08088000
    meta.update(variant='lyrics-v1',protocol='L6+LY1',requiredFlashKiB=1024,requiredSeries=13,codeStart=low,imageEnd=high,iapEraseEnd=0x080c0000,preservedSettings=[0x080fc000,0x080fe000,0x080ff800],fontSha256=digest(font),fontBodyCrc=crc,titleMaxGlyphs=96,renderSizes=[20,40],defaultLayout=1,fontReplacementProtocol='fixed-font-v1')
  else:
