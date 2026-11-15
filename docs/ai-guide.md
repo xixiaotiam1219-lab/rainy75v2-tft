@@ -1,8 +1,36 @@
 # AI 辅助定制与排错提示词
 
-如果你想用 Codex、Claude Code、Cursor 等 Agent 工具来魔改这个项目，直接让它“帮我写个能刷进 Rainy75 的固件”很容易翻车（它会瞎编内存地址或者把歌词功能塞进基础版）。把本仓库作为工作区，用下面整理好的提示词模板直接复制给它，会靠谱得多。
+如果你想用 Codex、Claude Code、Cursor 等 Agent 工具，或者用网页版 ChatGPT / Claude / Gemini 来定制自己的固件和界面，千万不要只说一句“帮我写个能刷进 Rainy75 的固件”——AI 会瞎编内存地址或者把歌词功能塞进基础版。把本仓库对应文件提供给它，再套用下面的提示词，改出来的代码才能直接编、安全刷。
 
-> 使用前注意：如果有本地原厂输入，自己放进 `inputs/` 就行；不要让 AI 把你的原厂 `.bin`、个人设备序列号、个人本机绝对路径或私人图片顺手提交到公开仓库。
+---
+
+## 定制固件需要把什么传给 AI？
+
+**先说最重要的一条：虽然仓库 `vendor/` 里放了 [Rainy75V2烧录工具20261112-1beta1.html](../vendor/Rainy75V2烧录工具20261112-1beta1.html)，但定制固件时千万不要把它、提取出的 `.bin`、`libISP585.a` 或字体 `.otf` 上传给聊天 AI。**
+原因很实际：这份烧录 HTML 虽然网页界面 JS 可读，但整份文件约 **1.14 MB** 里绝大部分体积都是 `FIRMWARE` 对象中用 Base64 + 异或混淆编码后的**三份原厂二进制固件机器码**（键盘 `0x3F`、接收器 `0x26`、屏幕 `0x0002`）。AI 根本读不懂编码后的二进制机器码，不仅没法据此帮你修改固件行为，塞进对话还会白白撑爆上下文、误导 AI 去改烧录网页本身，而且内嵌的原厂固件二进制归 WOB 原厂所有（非 MIT 开源）。
+
+你真正需要做的只是：本地用 `python tools/extract_stock.py "vendor/Rainy75V2烧录工具20261112-1beta1.html" --out inputs` 解出原厂 `.bin` 放在 `inputs/`，让 AI 只改下面的纯文本源码或 JSON 配置，改完后再由你（或本地 Agent）跑 `tools/build.py` 拼出最终固件。
+
+AI 真正需要看的是**本仓库的纯文本源码、配置和文档**，具体分两种情况：
+
+### 情况一：用本地 AI 编程工具（推荐：Cursor / Claude Code / Codex / Antigravity）
+
+- **要给什么**：直接把本仓库克隆到本地，用 AI 工具打开项目目录即可；在要求定制固件或界面时，提醒它**不要读取 `vendor/*.html` 里的大段编码固件，也不要去改 `vendor/`**（直接改 `profiles/`、`firmware/`、`web/`、`desktop/`）。
+- **如果想让 AI 顺便帮你编译出可刷入的 `.bin`**：只需你提前在本地跑一次 `tools/extract_stock.py`，再把 `inputs/libISP585.a` 放好并装上 Clang（AI 会直接调用 `tools/build.py` 构建，不会把 `inputs/` 上传到 Git）。
+
+### 情况二：用网页版聊天 AI（ChatGPT / Claude / Gemini 等上传文件对话）
+
+- **打包上传时记得剔除 `vendor/`**：如果去 GitHub 点 `Code → Download ZIP` 下载整个仓库，记得**先删掉里面的 `vendor/` 目录**（以及本地生成的 `inputs/`、`build/`），把剩下的纯源码打成压缩包（只有几百 KB）再传给 AI；不然 `1.14 MB` 的烧录 HTML 会把附件体积和对话上下文占掉一大半。
+- **如果平台限制附件数量，按你想改的内容挑下面这几个文件传就行**：
+
+| 你想让 AI 帮你改什么 | 必须传给 AI 的仓库文件 | 你还需要额外提供的材料 | 拿到 AI 结果后怎么做 |
+| --- | --- | --- | --- |
+| **只改配色 / 改大按键图标** | `profiles/themes.json`、`profiles/keys.json`、`profiles/font.json`、`tools/assets.py`、`docs/customization.md` | 想要的配色风格或参考图、想增改的按键 | 把 AI 改好的 `.json` 放回本地，自己跑 `build.py` 编译烧录 |
+| **换成自己的 GIF 角色动画** | `profiles/themes.json`、`tools/assets.py`、`docs/customization.md` | 你自己的图片 / GIF 源文件，并说明是否装了歌词版 | 让 AI 裁成 `320×172`（歌词版需满足全帧和 `(22,39)` 标记像素），在网页工作台上传到 S1 |
+| **改基础版画面排版 / 新增状态** | 上面全部 + `README.md`、`AGENTS.md`、`firmware/ips/*`、`firmware/main/*`、`tools/build.py`、`docs/protocol.md`、`docs/compatibility.md` | 你想要的布局草图、数据来源说明 | 替换本地源码后运行 `build.py` 和测试，确认无报错再烧录 |
+| **改歌词版布局 / 控制台 / 匹配规则** | 上面全部 + `firmware/ips-lyrics/*`、`desktop/*`、`tools/fontpack.py`、`docs/lyrics.md` | 使用的播放器（QQ / 网易云）与具体需求 | 替换源码后跑 `npm test`，需要时重新编译歌词版 IPS |
+
+> 除了文件，发提示词时还一定要用文字交代清楚三件事：① 你要改的是**基础屏幕版**还是**歌词扩展**；② **不要让 AI 把你的原厂 `.bin`、个人设备号、本地路径或私人图片写进可公开提交的内容**；③ 网页版 AI 改完代码后无法替你实机验证，务必先自己跑一遍 `unittest` / `npm test` 和 `build.py` 的边界检查再刷入键盘。
 
 ---
 
@@ -121,8 +149,8 @@
 ```text
 请先阅读 LICENSE、DISCLAIMER.md、THIRD_PARTY_NOTICES.md 和 CONTRIBUTING.md。
 帮我检查当前分支准备提交的内容：
-1. 确认没有把 inputs/ 里的原厂固件、libISP585.a、build/ 产物、个人设备标识、Elog 日志、本地绝对路径或私人角色图放进 Git 暂存区；
-2. 确认保留了原作者 LICENSE 署名、字体 OFL-1.1 声明和 Elog 上游 MIT 声明；
+1. 确认没有把 inputs/ 里解出的 .bin、libISP585.a、build/ 产物、个人设备标识、Elog 日志、本地绝对路径或私人角色图放进 Git 暂存区，也不要改动 vendor/ 里的原厂随仓烧录文件；
+2. 确认保留了原作者 LICENSE 署名、字体 OFL-1.1 声明、Elog 上游 MIT 声明以及 vendor/ 的非 MIT 版权边界说明；
 3. 同步更新 README 和相关文档里的截图、版本状态和已知限制，不虚构未跑过的实机测试；
 4. 跑完 python -m unittest、npm test 和 python tools/check_release.py 并把结果列出来，等我确认后再推远程。
 ```

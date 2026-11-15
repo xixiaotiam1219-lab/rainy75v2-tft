@@ -1,6 +1,6 @@
 # 本地构建指南
 
-因为原厂固件和芯片厂商 SDK 不能直接放在开源仓库里分发，刷机所需的 `.bin` 固件需要你在自己电脑上“用原厂固件 + 本仓库的开源补丁”拼出来。整个过程全自动，只要把依赖装好、输入文件放到位，跑几条命令就行。
+因为刷机所需的完整 `.bin` 要把 WOB 原厂镜像、芯片厂静态库 `libISP585.a` 和本仓库的开源补丁拼在一起，所以最终固件仍需要你在自己电脑上编译生成（完整步骤很短，装好工具跑几条命令就行）。其中对应的原厂烧录网页已经放在仓库的 [vendor/](../vendor/README.md) 目录里（内含原厂二进制，**非 MIT 开源**），你可以直接从里面一键解出主控和屏幕固件；`libISP585.a` 则需从 WCH 官方开源仓库下载放到 `inputs/`。
 
 ---
 
@@ -35,13 +35,13 @@
 | `inputs/ips-stock.bin` | 原厂 IPS `0x0002` | `32defab7902e57eb972a577fc6cbf3a7e57bc772d59b99f11038370412b77f41` |
 | `inputs/main-stock.bin` | 原厂主控 beta1 `0x3F` | `bc575a6d7b19042048705248715a43a67a23c7f217ba0ac464c539a390f4d23b` |
 
-如果你手里的是包含该版本的原厂离线烧录网页 HTML 文件，可以直接用自带脚本把这两个 `.bin` 解出来放到 `inputs/`（脚本只读取里面的固件数据，不会运行网页里的 JavaScript）：
+仓库已在 [vendor/](../vendor/README.md) 随附了匹配这一版本的原厂离线烧录网页 `Rainy75V2烧录工具20261112-1beta1.html`（内置键盘 `0x3F`、接收器 `0x26`、屏幕 `0x0002` 三份原厂固件，**版权归原厂所有、不适用 MIT 协议**）。直接在仓库根目录运行下面这条命令，就能把构建需要的 `ips-stock.bin` 和 `main-stock.bin` 解到 `inputs/`（脚本只读文本里内嵌的数据，不会运行网页 JS，也不会提取或改动接收器 `0x26` 固件）：
 
 ```sh
-python tools/extract_stock.py "/path/to/factory-flasher.html" --out inputs
+python tools/extract_stock.py "vendor/Rainy75V2烧录工具20261112-1beta1.html" --out inputs
 ```
 
-提取完成后脚本会自动核对 SHA-256，不匹配会直接报错提示。
+提取完成后脚本会自动核对 SHA-256，不匹配会直接报错提示；如果你自己手里本来就有同版本官方烧录网页 HTML，也可以把路径换成你自己的文件。
 
 ### 2. WCH 官方 Flash 读写库（`libISP585.a`）
 

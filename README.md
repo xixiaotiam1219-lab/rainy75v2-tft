@@ -86,7 +86,7 @@ Rainy75 V2 内部其实有两颗芯片在协同工作：
 | **休眠与模式切换** | 实验中 | 依赖各批次实际供电情况与休眠逻辑，尚未测遍所有使用场景 |
 | **完全断电保时** | 硬件限制 | 主控没有独立后备纽扣电池，拨动开关彻底断电后 RTC 计数会重置，再开机会显示 `--:--:--`，重新连一次 USB 点校时即可 |
 
-> 仓库内**不包含** WOB 原厂完整固件、WCH 官方 `libISP585.a`、原厂网页源码或个人角色图，所有固件补丁均由你在本地用原厂匹配文件编译生成。支持的具体硬件和版本哈希见 [兼容性说明](docs/compatibility.md)。
+> 仓库已经在 [vendor/](vendor/README.md) 里随附了一套配套的原厂离线烧录网页 `Rainy75V2烧录工具20261112-1beta1.html`（内含键盘 `0x3F`、接收器 `0x26`、屏幕 `0x0002` 三份原厂固件，**版权归 WOB 原厂所有、不适用 MIT 协议**）；但**仍不包含** WCH 官方 `libISP585.a`、完整编译后的 `.bin` 或个人角色图。所有自定义补丁固件依然需要你在本地结合原厂输入重新编译生成。支持的具体硬件和版本哈希见 [兼容性说明](docs/compatibility.md)。
 
 ---
 
@@ -97,8 +97,8 @@ Rainy75 V2 内部其实有两颗芯片在协同工作：
 1. **看一眼兼容性与注意事项**
    阅读 [兼容性说明](docs/compatibility.md) 和 [免责声明](DISCLAIMER.md)，确认自己的键盘型号和手头有匹配的原厂固件文件（强烈建议先生成原厂恢复包）。
 
-2. **在本地生成补丁固件**
-   按照 [本地构建指南](docs/build.md) 准备好工具链和 `inputs/` 原厂输入文件，编译出主控和屏幕固件、以及对应的 `manifest.json` 和主题 GIF。
+2. **在本地提取原厂镜像并生成补丁固件**
+   按照 [本地构建指南](docs/build.md) 装好工具链，用 `tools/extract_stock.py` 从 [vendor/Rainy75V2烧录工具20261112-1beta1.html](vendor/Rainy75V2烧录工具20261112-1beta1.html) 解出原厂 `.bin`、再放入 `libISP585.a`，编译出主控和屏幕固件、以及对应的 `manifest.json` 和主题 GIF。
 
 3. **打开本地 WebHID 工作台**
    ```sh
@@ -133,6 +133,7 @@ profiles/             可编辑配置（大按键点阵 keys.json、5x7 字体 f
 assets/               默认几何机器人 GIF 与效果预览图
 web/                  纯本地 WebHID 控制台（图标编辑器、校时、素材与字库上传、双芯片烧录）
 tools/                原厂固件提取、补丁构建脚本、字库打包、本地 HTTP 服务与 ARM 仿真测试
+vendor/               原厂离线烧录网页 HTML（内嵌非 MIT 原厂二进制，供提取输入与救砖恢复使用）
 tests/                主机协议、媒体匹配、桌面控制台与素材单元测试
 docs/                 使用、构建、协议、定制、救砖与 AI 协作文档
 ```
@@ -152,6 +153,7 @@ python tools/check_release.py
 ## 许可与致谢
 
 - 仓库自有源码、文档和默认几何机器人素材按 [MIT License](LICENSE) 开源，请保留作者署名。
+- [vendor/](vendor/README.md) 中的离线烧录 HTML 及其内嵌原厂固件二进制（键盘 `0x3F`、接收器 `0x26`、屏幕 `0x0002`）归各自原权利人所有，**不适用 MIT 协议**。
 - 歌词扩展使用的 20px 字库衍生自 Google / Adobe **Noto Sans CJK SC**，沿用 [SIL OFL-1.1](licenses/OFL-1.1.txt)。
 - 网易云音乐本地 Elog 解析结构参考了上游开源项目，保留对应 [MIT 声明](licenses/netease-elog-MIT.txt)。
 - 完整依赖与第三方版权说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，风险与使用边界见 [DISCLAIMER.md](DISCLAIMER.md)，提 Issue 或 PR 请看 [CONTRIBUTING.md](CONTRIBUTING.md)。
