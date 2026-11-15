@@ -2,6 +2,7 @@
 import argparse,hashlib,json,os,shutil,struct,subprocess
 from pathlib import Path
 from assets import generate,ROOT,validate_cache_gif
+from main_profiles import MAIN_PROFILES
 
 IPS_SHA='32defab7902e57eb972a577fc6cbf3a7e57bc772d59b99f11038370412b77f41'
 MAIN_SHA='bc575a6d7b19042048705248715a43a67a23c7f217ba0ac464c539a390f4d23b'
@@ -62,7 +63,10 @@ def isp_blob(lib,out,clang):
 def build(a):
  require(not a.lyrics or a.target=='ips' and not a.restore_stock,'--lyrics requires a normal IPS build')
  out=Path(a.out).resolve()/(a.target+'-restore' if a.restore_stock else 'ips-lyrics' if a.lyrics else a.target);out.mkdir(parents=True,exist_ok=True)
- original=checked(a.stock,IPS_SHA if a.target=='ips' else MAIN_SHA);base=0x08004000 if a.target=='ips' else 0x2000;image=bytearray(original);patches=[];meta={}
+ if a.target=='ips':original=checked(a.stock,IPS_SHA);profile=None
+ else:
+  original=Path(a.stock).read_bytes();profile=MAIN_PROFILES.get(digest(original));require(profile is not None,'Main SHA-256 is not a supported revision');require(len(original)==profile['bytes'],'Main factory length mismatch')
+ base=0x08004000 if a.target=='ips' else 0x2000;image=bytearray(original);patches=[];meta={}
  if a.restore_stock:
   size=507904 if a.target=='ips' else 294912;image.extend(b'\xff'*(size-len(image)));(out/f'rainy75v2-{a.target}-restore.bin').write_bytes(image)
   manifest={'format':'rainy75v2-tft/build-v1','target':a.target,'status':'user-supplied factory restore; not a device readback','bytes':size,'sha256':digest(image),'stockSha256':digest(original),'applicationBase':0x4000 if a.target=='ips' else 0x2000,'iapPid':0x3078 if a.target=='ips' else 0x3079,'appPid':0x3075}
@@ -85,9 +89,10 @@ def build(a):
    theme=load(ROOT/'profiles/themes.json')[a.theme]
    validate_cache_gif(out/'assets'/f'robot-{a.theme}.gif',theme)
    linker=ROOT/'firmware/ips-lyrics/linker.ld';sources=[ROOT/'firmware/ips-lyrics/native_ui.c',ROOT/'firmware/ips/rtc.c',ROOT/'firmware/ips-lyrics/lyrics.c'];low,high=0x08080000,0x08088000
-   meta.update(variant='lyrics-v1',protocol='L6+LY1',requiredFlashKiB=1024,requiredSeries=13,codeStart=low,imageEnd=high,iapEraseEnd=0x080c0000,preservedSettings=[0x080fc000,0x080fe000,0x080ff800],fontSha256=digest(font),fontBodyCrc=crc,titleMaxGlyphs=96,renderSizes=[20,40],defaultLayout=1,fontReplacementProtocol='fixed-font-v1')
+   meta.update(variant='lyrics-v1',protocol='L6+LY1',requiredFlashKiB=1024,requiredSeries=13,codeStart=low,imageEnd=high,iapEraseEnd=0x080c0000,preservedSettings=[0x080fc000,0x080fe000,0x080ff800],fontSha256=digest(font),fontBodyCrc=crc,titleMaxGlyphs=96,renderSizes=[20,30,40],defaultLayout=1,layouts=['classic20','caption40','focus40','double40','immersive48'],fontReplacementProtocol='fixed-font-v1',temporaryCoverProtocol='RAM48-v3',volumeProtocol='OP30-v1')
  else:
   require(a.isp_lib,'--isp-lib is required for main firmware');meta['isp']=isp_blob(Path(a.isp_lib).resolve(),out,clang)
+  (out/'main_addresses.h').write_text('/* SPDX-License-Identifier: MIT; exact hash-selected profile. */\n'+''.join(f'#define {name} 0x{profile[key]:x}\n'for name,key in [('MAIN_IPS_HANDLER','ipsHandler'),('MAIN_RTC_INIT','rtcInit'),('MAIN_RX_BUFFER','rx'),('MAIN_WORKER_A_NEXT','nextA'),('MAIN_WORKER_B_NEXT','nextB')]),encoding='utf8')
   low=(0x2000+len(original)+15)&~15;high=0x49000;linker=out/'main.ld'
   linker.write_text(f'ENTRY(rainy_main_rtc_probe)\nPHDRS {{ probe PT_LOAD FLAGS(5); }}\nSECTIONS {{ . = 0x{low:x}; .text : {{ *(.text*) *(.rodata*) }} :probe .data : {{ *(.data*) }} .bss : {{ *(.bss*) *(COMMON) }} /DISCARD/ : {{ *(.eh_frame*) *(.comment*) *(.riscv.attributes*) }} }}\nASSERT(SIZEOF(.data)==0 && SIZEOF(.bss)==0,"Unexpected static RAM")\nASSERT(. <= 0x49000,"Code overlaps clock data")\n',encoding='utf8')
   sources=[ROOT/'firmware/main/clock_bridge.c'];flags=['--target=riscv32-none-elf','-march='+a.riscv_march,'-mabi=ilp32','-mno-relax','-msmall-data-limit=0','-Wl,--no-relax']
@@ -108,9 +113,9 @@ def build(a):
   else:image.extend(b'\xff'*((-len(image))%512))
   pid=0x3078;meta.update(theme=a.theme,uiVersion='0.6.3',moduleRam='0x2005f000..0x20060000');meta.setdefault('protocol','L6')
  else:
-  for addr,old,symbol,rd in [(0x24680,0x20392,'rainy_main_rtc_probe',0),(0x134d8,0x120b8,'rainy_main_rtc_init',1)]:patch(addr-base,jal(addr,old,rd),jal(addr,symbols[symbol],rd))
-  for addr,following,symbol in [(0x2000a874,0x2000752a,'rainy_clock_worker_a'),(0x2000b49a,0x200091fa,'rainy_clock_worker_b')]:patch(addr-0x20000000+4,jal(addr,0x20007000,1)+jal(addr+4,following,1),far_call(addr,symbols[symbol]))
-  require(len(image)+base<=0x49000,'Code reaches data page');image.extend(b'\xff'*(0x4a000-base-len(image)));pid=0x3079;meta.update(protocol='V7.1',capability='0x4350',clockDataPage='0x49000..0x49fff')
+  for addr,old,symbol,rd in [(profile['ipsHook'],profile['ipsHandler'],'rainy_main_rtc_probe',0),(profile['rtcHook'],profile['rtcInit'],'rainy_main_rtc_init',1)]:patch(addr-base,jal(addr,old,rd),jal(addr,symbols[symbol],rd))
+  for addr,following,symbol in [(profile['workerA'],profile['nextA'],'rainy_clock_worker_a'),(profile['workerB'],profile['nextB'],'rainy_clock_worker_b')]:patch(addr-0x20000000+4,jal(addr,profile['collector'],1)+jal(addr+4,following,1),far_call(addr,symbols[symbol]))
+  require(len(image)+base<=0x49000,'Code reaches data page');image.extend(b'\xff'*(0x4a000-base-len(image)));pid=0x3079;meta.update(protocol='V7.1',capability='0x4350',clockDataPage='0x49000..0x49fff',stockVersion=profile['stockVersion'],mainProfile=profile)
  allowed={i for start,n in patches for i in range(start,start+n)}
  require(image[:512]==original[:512] and all(x==y or i in allowed for i,(x,y) in enumerate(zip(original,image))),'Unexpected factory modifications')
  binfile=out/f'rainy75v2-{a.target}.bin';binfile.write_bytes(image)

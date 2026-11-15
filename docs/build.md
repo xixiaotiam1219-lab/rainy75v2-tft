@@ -34,6 +34,7 @@
 | --- | --- | --- |
 | `inputs/ips-stock.bin` | 原厂 IPS `0x0002` | `32defab7902e57eb972a577fc6cbf3a7e57bc772d59b99f11038370412b77f41` |
 | `inputs/main-stock.bin` | 原厂主控 beta1 `0x3F` | `bc575a6d7b19042048705248715a43a67a23c7f217ba0ac464c539a390f4d23b` |
+| `inputs/main-stock.bin` | 官方0.64 `0x40` | `31a9eb80752c1f8c94951dd6e2e6776eeb216f47ba58919ca36f6e6d26f0e476` |
 
 仓库已在 [vendor/](../vendor/README.md) 随附了匹配这一版本的原厂离线烧录网页 `Rainy75V2烧录工具20261112-1beta1.html`（内置键盘 `0x3F`、接收器 `0x26`、屏幕 `0x0002` 三份原厂固件，**版权归原厂所有、不适用 MIT 协议**）。直接在仓库根目录运行下面这条命令，就能把构建需要的 `ips-stock.bin` 和 `main-stock.bin` 解到 `inputs/`（脚本只读文本里内嵌的数据，不会运行网页 JS，也不会提取或改动接收器 `0x26` 固件）：
 
@@ -42,6 +43,16 @@ python tools/extract_stock.py "vendor/Rainy75V2烧录工具20261112-1beta1.html"
 ```
 
 提取完成后脚本会自动核对 SHA-256，不匹配会直接报错提示；如果你自己手里本来就有同版本官方烧录网页 HTML，也可以把路径换成你自己的文件。
+
+WOBHub 客户端中 `20261113-1` 的官方0.64／屏幕0.02资源也可从本地 ASAR 提取：
+
+```sh
+python tools/extract_stock.py "/path/to/WOBHub/resources/app.asar" --out inputs
+```
+
+工具只读固定 Rainy75 V2 资源条目并核对上述哈希，不运行应用内脚本。提取的是官方升级包，不能称为设备实际 Flash 备份；未核实的新发布目录会拒绝。
+
+构建器根据精确输入SHA选择独立主控地址表；随仓HTML仍是旧0x3F基线，不把它当作官方0.64包。
 
 ### 2. WCH 官方 Flash 读写库（`libISP585.a`）
 
@@ -144,3 +155,7 @@ npm test
 ```
 
 更完整的测试（Playwright 网页烟雾测试、Unicorn ARM 机器码仿真）说明见 [验证文档](validation.md)。下一步刷机请看 [基础版使用指南](usage.md)。
+
+## 已有用户按需升级
+
+基础版、传统歌词、沉浸与音量的依赖和更换范围见 [升级对照表](upgrade.md)。软件版本与协议能力不能混为一谈；仅更新后台即可获得的修复，不需要重复烧录。

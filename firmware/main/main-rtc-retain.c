@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT */
-/* Rainy75 V2 CH585 beta1 0x3f: read-only RTC diagnostic.
+/* Rainy75 V2 CH585 supported 0x3f/0x40: read-only RTC diagnostic.
  * Only sub13/op15 selectors0..3 are intercepted. All other frames tail into
  * the original IPS handler. No clock/GPIO/power/Flash registers are written.
  * The ACK descriptor is resolved from the live ABI GP register (gp-0x160),
@@ -7,14 +7,15 @@
  */
 typedef unsigned char u8;
 typedef unsigned int u32;
+#include "main_addresses.h"
 #define R32(a) (*(volatile u32 *)(a))
 #define R8(a) (*(volatile u8 *)(a))
 int rainy_main_rtc_probe(const u8 *p,u32 n){
  unsigned sum=13u+15u;u32 value,gp;unsigned i,field;volatile u8 *ack;
  if(n!=11||p[0]!=0xbe||p[1]!=0x1a||p[2]!=11||p[3]!=13||p[4]!=15||p[6]||p[7]||p[10]!=0xed||p[5]>5)
-  return ((int(*)(const u8*,u32))0x20392)(p,n);
+  return ((int(*)(const u8*,u32))MAIN_IPS_HANDLER)(p,n);
  field=p[5];sum+=field;
- if(p[8]!=(sum&255u)||p[9]!=(sum>>8))return ((int(*)(const u8*,u32))0x20392)(p,n);
+ if(p[8]!=(sum&255u)||p[9]!=(sum>>8))return ((int(*)(const u8*,u32))MAIN_IPS_HANDLER)(p,n);
  if(field<2){
   value=R32(0x40001038);
   for(i=0;i<8;i++){u32 next=R32(0x40001038);if(next==value)break;value=next;}
@@ -37,5 +38,5 @@ int rainy_main_rtc_probe(const u8 *p,u32 n){
 void rainy_main_rtc_init(u32 year,u32 mon,u32 day,u32 hour,u32 min,u32 sec){
  unsigned cause=R8(0x40001044)&7u;
  if((cause==0u||cause==2u||cause==3u||cause==5u)&&R32(0x40001038)<0xa8c00000u)return;
- ((void(*)(u32,u32,u32,u32,u32,u32))0x120b8)(year,mon,day,hour,min,sec);
+ ((void(*)(u32,u32,u32,u32,u32,u32))MAIN_RTC_INIT)(year,mon,day,hour,min,sec);
 }

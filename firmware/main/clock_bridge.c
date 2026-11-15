@@ -114,15 +114,17 @@ static void clock_push(u32 t){
  old=irq_lock();if(!R8(0x4000300b))for(i=0;i<8;i++)R8(0x40003008)=p[i];irq_unlock(old);
 }
 void rainy_clock_response(void){
- u32 gp;volatile u8 *rx=(volatile u8*)0x20016d28;
+ u32 gp;volatile u8 *rx=(volatile u8*)MAIN_RX_BUFFER;
  __asm__ volatile("mv %0,gp":"=r"(gp));
  if(!R32(gp+0x17c)||R32(gp-0x1d0)||rx[0]!=0xbe||rx[1]!=0x1d||rx[2]!=4||rx[3]!=0xed)return;
- R32(0x20016d28)=0;if(R8(0x4000300b))return;
+ R32(MAIN_RX_BUFFER)=0;if(R8(0x4000300b))return;
  clock_push(rainy_clock_value());
 }
 /* Replace two adjacent calls without losing the first call's output registers.
  * Original second-call arguments/return and callee-saved registers are kept.
  */
+#define CLOCK_STRING_INNER(value) #value
+#define CLOCK_STRING(value) CLOCK_STRING_INNER(value)
 #define CLOCK_WORKER(name,next) \
 __attribute__((naked)) void name(void){__asm__ volatile( \
  "addi sp,sp,-64\n sw ra,60(sp)\n li t0,0x20007000\n jalr ra,t0,0\n" \
@@ -131,6 +133,6 @@ __attribute__((naked)) void name(void){__asm__ volatile( \
  "call rainy_clock_response\n" \
  "lw a0,0(sp)\n lw a1,4(sp)\n lw a2,8(sp)\n lw a3,12(sp)\n lw a4,16(sp)\n lw a5,20(sp)\n lw a6,24(sp)\n lw a7,28(sp)\n" \
  "lw t0,32(sp)\n lw t1,36(sp)\n lw t2,40(sp)\n lw t3,44(sp)\n lw t4,48(sp)\n lw t5,52(sp)\n lw t6,56(sp)\n" \
- "lw ra,60(sp)\n addi sp,sp,64\n li t0," #next "\n jr t0\n");}
-CLOCK_WORKER(rainy_clock_worker_a,0x2000752a)
-CLOCK_WORKER(rainy_clock_worker_b,0x200091fa)
+ "lw ra,60(sp)\n addi sp,sp,64\n li t0," CLOCK_STRING(next) "\n jr t0\n");}
+CLOCK_WORKER(rainy_clock_worker_a,MAIN_WORKER_A_NEXT)
+CLOCK_WORKER(rainy_clock_worker_b,MAIN_WORKER_B_NEXT)

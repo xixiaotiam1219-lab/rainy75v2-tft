@@ -29,16 +29,17 @@ export class AppClient{
  static async connect(){return new AppClient(await HidIO.choose(APP_PID,256));}
  async close(){await this.io.close();}
  async ack(){return parseAck(await this.io.exchange(ACK_READ,p=>p[0]===0xbe&&p[1]===0xe4&&p[3]===0x84));}
- async sendAwait(packet,accept,timeout=8000){
+ async sendAwait(packet,accept,timeout=8000,pollMs=15){
   await this.io.send(packet);const start=this.now();let last;
-  while(this.now()-start<timeout){last=await this.ack();if(accept(last))return last;await this.pause(15);}
+  while(this.now()-start<timeout){last=await this.ack();if(accept(last))return last;await this.pause(pollMs);}
   throw Error('指令应答超时：'+JSON.stringify(last));
  }
- async request(op,id=0,payload=[],test=a=>a.status===1&&a.value===id){
+ async request(op,id=0,payload=[],test=a=>a.status===1&&a.value===id,{pollMs=15}={}){
+  if(!Number.isInteger(pollMs)||pollMs<2||pollMs>100)throw Error('无效查询间隔');
   return this.sendAwait(command(op,id,payload),a=>{
    if(a.sub!==13)return false;if(test(a))return true;
    if(a.value===id&&a.status>=2&&a.status<=7)throw Object.assign(Error('设备拒绝指令，状态 '+a.status),{status:a.status});return false;
-  });
+  },8000,pollMs).catch(e=>{throw Object.assign(new Error('OP'+op+' / ID'+id+'：'+e.message),{status:e.status,cause:e});});
  }
  async queryMain(f){return (await this.request(15,f,[],a=>a.status===0xd0+f)).value;}
  async queryIps(f){return (await this.request(11,f,[],a=>a.status===0xb0+f)).value;}
@@ -81,6 +82,21 @@ export class AppClient{
    await this.stock(3,0,0,0,[crc&255,crc>>>8]);ok=true;
   }finally{if(!ok)try{await this.stock(4);}catch{}await this.control(5);}
  }
+ async _removeFont(previous){
+  const query=async field=>(await this.request(22,field,[],a=>a.status===0xc0+field)).value;
+  const p=new Uint8Array(12),v=new DataView(p.buffer);p.set(new TextEncoder().encode('FNT!'));v.setUint32(4,previous.bodyCrc,true);v.setUint32(8,previous.bytes,true);const id=++this.seq&65535;
+  await this.request(27,id,p,a=>a.status===0&&a.value===id);
+  const start=this.now();let state;while((state=await query(9))===2){if(this.now()-start>8000)throw Error('字库移除工作线程超时');await this.pause(25);}
+  if(state!==1){const result=await query(10);throw Error(result===254?'旧字库不匹配，未移除':'字库移除失败，状态 '+result);}
+ }
+ async deleteFont(bytes,{deleteConfirmed=false}={}){
+  if(deleteConfirmed!==true)throw Error('请先确认仅删除屏内 FONT.BIN');const previous=validateFont(bytes);
+  await this.request(24,1,[],a=>a.status===0xa6&&a.value===0x4c59);
+  try{await this.request(22,9,[],a=>a.status===0xc9);}catch{throw Error('无法确认字库删除接口，请检查连接和歌词固件版本');}
+  let suspended=false;
+  try{await this.control(2);suspended=true;await this._removeFont(previous);return{deleted:true};}
+  finally{if(suspended)await this.control(5);}
+ }
  async uploadFont(bytes,{replaceConfirmed=false,replaceExisting=false,previousFont,progress=()=>{}}={}){
   if(!replaceConfirmed)throw Error('请先确认写入或替换 FONT.BIN');const font=validateFont(bytes);
   if(replaceExisting&&!previousFont)throw Error('替换需要当前屏内版本的旧 FONT.BIN');
@@ -95,12 +111,7 @@ export class AppClient{
   let ok=false,suspended=false,started=false;
   try{
    await this.control(2);suspended=true;
-   if(previous){
-    const p=new Uint8Array(12),v=new DataView(p.buffer);p.set(new TextEncoder().encode('FNT!'));v.setUint32(4,previous.bodyCrc,true);v.setUint32(8,previous.bytes,true);const id=++this.seq&65535;
-    await this.request(27,id,p,a=>a.status===0&&a.value===id);
-    const start=this.now();let state;while((state=await query(9))===2){if(this.now()-start>8000)throw Error('字库替换工作线程超时');await this.pause(25);}
-    if(state!==1){const result=await query(10);throw Error(result===254?'旧字库不匹配，未替换':'字库替换失败，文件系统状态 '+result);}
-   }
+   if(previous)await this._removeFont(previous);
    started=true;
    await this.stock(1,0,0,0,begin);
    for(let offset=0,seq=0;offset<bytes.length;offset+=232,seq++){await this.stock(2,seq&255,seq>>>8,0,bytes.subarray(offset,offset+232));progress(Math.min(1,(offset+232)/bytes.length));}

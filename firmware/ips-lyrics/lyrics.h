@@ -10,4 +10,6 @@ void lyrics_draw(u8 *pixels,u32 now);
 int lyrics_suspend(void);
 void lyrics_maintenance(int suspended);
 void lyrics_cancel_maintenance(void);
+int lyrics_volume_key(u32 now,u16 *progress,u8 *level,u8 *muted,u16 *alpha);
+unsigned lyrics_volume_icon(unsigned x,unsigned y,int muted);
 #endif

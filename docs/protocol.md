@@ -4,7 +4,7 @@
 
 所有 PC 端配置、传图、校时与歌词推送均通过键盘 USB 本体完成：
 - **USB 设备**：`VID 0x36B0 : PID 0x3075`
-- **HID 接口**：`Usage Page 0xFF60`，`Usage 0x61`，`Report ID 0`，固定 `256` 字节报文（2.4G 接收器不支持这些操作）
+- **HID 接口**：`Usage Page 0xFF60`，`Usage 0x61`，`Report ID 0`，固定 `256` 字节报文（公开工具尚未实现接收器写屏）
 
 ---
 
@@ -65,46 +65,45 @@ BE 1A LEN 0D OP ID_LO ID_HI 00 [PAYLOAD...] SUM_LO SUM_HI ED
 
 ---
 
-## 4. 可选歌词扩展协议（`LY1`）与 `R75F/2` 格式
+## 4. 可选歌词扩展协议（LY1）与R75F/2格式
 
-### 控制指令（`OP 20..27`）
-
-| OP | 用途与载荷 | 应答 |
+| OP | 内容 | 应答 |
 | --- | --- | --- |
-| **24** | HELLO（无载荷），触发 GUI worker 在空闲时初始化打开 `FONT.BIN` | `0xA6 / 0x4C59` |
-| **20** | 分段发送文本字形 ID：`kind:u8`（0 歌名 / 1 当前句 / 2 下一句）+ `count:u8` + `ids:u16LE[]`（每段 ≤ 96 字形，同一 revision 传齐 3 段） | `DONE (1) / revision` |
-| **21** | 提交本轮文本并附带 17B/25B 计时信息：`positionMs:u32`, `durationMs:u32`, `playing:u8`[, `lineMotion:u32`, `lineSpan:u32`] | `QUEUED (0) / revision`，随后通过 `OP 22 ID 3` 轮询真实 committed revision |
-| **25** | 纯时间同步（不触发字体文件读取，格式同 `OP 21` 计时载荷） | `DONE (1) / seq` |
-| **23** | 切换屏幕页面：`0` = 按键机器人页，`1` = 歌词页 | `DONE (1)`（实际切换结果由 `OP 22 ID 1` 确认） |
-| **26** | 切换歌词字号布局：`layout:u8`（`0` = 20px 双行，`1` = 40px 大字字幕 04，默认 `1`） | `DONE (1) / sequence`，由 `OP 22 ID 8` 确认 |
-| **27** | 安全删除旧字库准备替换（12B）：`FNT!` + `expectedOldBodyCrc:u32LE` + `expectedOldBytes:u32LE` | `QUEUED (0) / sequence`，由 `OP 22 ID 9/10` 确认 |
-| **22** | 查询歌词模块状态（详见下表） | `0xC0 + field / value` |
+| 24 | HELLO，无 payload；请求 GUI worker 初始化字库 | `A6 / 4C59` |
+| 20 | 同 revision 分三字段：kind0 标题、1当前、2下一句；`kind:u8,count:u8,ids:u16LE[]`，每字段≤96字形 | `DONE / revision` |
+| 21 | 提交三个完整字段；positionMs:u32、durationMs:u32、playing:u8、scrollElapsed:u32、scrollSpan:u32 | `QUEUED / revision`，再查真正 committed revision |
+| 25 | 同17字节计时 payload，不重新读取字体 | `DONE / sequence` |
+| 23 | payload0=按键页，1=歌词页 | `DONE`，查询实际模式确认 |
+| 26 | `layout:u8`：0=20px双行，1=04大字字幕，2=大字聚焦，3=双行大字，4=沉浸封面；默认1 | `DONE / sequence`；OP22字段8确认 |
+| 27 | 12B：ASCII `FNT!` + expectedOldBodyCrc:u32LE + expectedOldBytes:u32LE | `QUEUED / sequence`；OP22字段9确认真正完成 |
+| 28 | 临时封面 BEGIN / DATA / COMMIT / CLEAR，见下文 | 收包 `DONE`，提交 `QUEUED`，查询字段13/14确认 |
+| 29 | `size:u8,style:u8`；size=20/30/40，style=0清晰/1柔和，用于沉浸页 | `DONE / sequence`；字段21/22读回 |
+| 30 | `level:u8,muted:u8,scope:u8,style:u8,holdMs:u16LE`，共6B | `DONE / sequence` |
+| 22 | 查询状态 | `C0+(field&15) / value` |
 
-`OP 22` 查询字段：
-- `0`：`ready`（0 未初始化 / 1 就绪 / 2 初始化排队中）
-- `1`：当前实际 `mode`（0/1）
-- `2`：最近错误码
-- `3`：当前已提交生效的 `committed revision`（重连时必须先等旧任务结束并从该序号续编）
-- `4`：`job | (queued << 8)`
-- `5 / 6`：固件编译期绑定的 `FONT_BODY_CRC` 低/高 16 位
-- `7`：单字段最大字形数上限（`96`）
-- `8`：当前歌词字号布局（`0` = 20px / `1` = 40px；旧版歌词固件返回 `RANGE` 报错，桌面端据此自动兼容）
-- `9`：字库替换任务状态（`0` 未请求 / `2` 排队中 / `1` 完成 / `7` 失败）
-- `10`：字库替换详细结果（`0` 成功、非零原厂 FatFs 错误、`0xFC` 分配失败、`0xFD` 被取消、`0xFE` 旧字库头部或大小不匹配）
+OP22字段：0 ready；1 mode；2 error；3 committed revision；4 job及queued；5/6编译期字体bodyCRC低/高；7标题字形上限；8布局；9字库维护状态（0未请求、2排队、1完成、7失败）；10维护结果（0成功、原生FatFs非零错误、FC分配失败、FD排队取消、FE旧头部或大小不匹配）；11模板数量（本版为5）。未知字段返回RANGE，主机据此兼容旧歌词固件：支持字段8但不支持11时按旧双模板处理。重连先等旧任务完成并从 committed revision 续号，不能从固定序号覆盖未完成任务。
 
-### 字库安全替换机制（`OP 27`）
+附加字段：12临时封面能力`4341`；13封面状态；14已提交封面revision；15已接收字节；16封面格式位（bit0支持6bit索引，bit1支持48px）；17/18最近/最大CPU绘制毫秒；19背景缓存就绪；20背景缓存能力1；21字号；22边缘风格；23音量能力`564F`；24音量值及muted高字节；25音量事件计数；26scope及style高字节；27当前提示alpha（0..256）；28停留毫秒。绘制毫秒不包含USB传输与LCD扫描，不等于帧率。
 
-- 只有在 `OP 2` 暂停屏幕且旧字库句柄/缓存释放后才接受 `OP 27`；UART 回调只校验报文并入队，不直接动文件。
-- GUI worker 在 `LCD_BUSY == 0` 时打开固定文件名 `FONT.BIN`，核对 `R75F/2` 魔数/版本、文件大小、记录的 `bodyCRC` 与头部 CRC；全部一致才关闭句柄并用原厂 FatFs `unlink` 删掉 `FONT.BIN`。若期间收到 `OP 5` 恢复信号，尚未执行的替换请求会立刻取消。
-- 主机 `AppClient.uploadFont(newBytes, { replaceConfirmed: true, replaceExisting: true, previousFont: oldBytes })` 会先在本地验证好两份字库及新固件期望 CRC，然后依次执行：`OP 2` 暂停 → `OP 27` 排队删除旧字库并轮询至成功 → `BEGIN/DATA/END` 上传新字库 → `OP 5` 恢复。
+OP28 BEGIN：`0,revision:u16LE,width:u8,height:u8,format:u8,crc32:u32LE,palette:4*u16LE`。格式1为64×64 RGB565（8192B），格式2为64×64的64色6bit索引（3200B），格式3为48×48的同格式索引（1856B）。索引格式前128B为64个RGB565颜色，后续连续6bit小端位流。DATA：`1,revision:u16LE,offset:u16LE,bytes[]`，要求顺序、长度有界。COMMIT：`2,revision:u16LE`，核对收齐与CRC32；CLEAR：`3,revision:u16LE`。GUI在DMA空闲时才发布，等待字段13为DONE且14为revision。临时封面仅存RAM，不创建素材文件，不显示素材下载提示。
 
-### `R75F/2` 字库二进制布局与 20/40px 渲染
+48px收包使用inactive cover缓冲的6144..7999字节，背景缓存占前5760字节。发布后交换两个原有8192B缓冲并重建背景，不增加整帧底图或大块常驻缓存。旧64px格式收包期间停用同缓冲的背景缓存，防止覆盖。
 
-- **文件头（256B）**：Magic `R75F`、版本 `2`、头长度 `256`、宽高 `20×20`、每字位图 `50B`、记录长 `52B`、字形总数 `count`、升序 Unicode `u32` 索引表起点、字形数据起点、回退符 `□ (U+25A1)` 索引、总字节数、`body CRC32`、头 `CRC32`（计算时置零偏移 40..43）以及源字体 SHA-256。
-- **单字记录（52B）**：`advance (1B)` + `flags (1B)` + `20×20 单色位图 (50B)`。
-- **20px / 40px 双布局共用机制**：布局 `1`（40px 大字字幕）直接从同一张 20px 单色掩码按整数 `2×` 倍放大绘制当前句（标题保持 20px），不额外在堆里分配 40px 大位图，也不重新读字库；大字超宽时在字幕框内横向滚动，换句纵向过渡裁剪在卡片区域内部。
-- **渲染与 I/O 边界**：桌面端先把 UTF-8 字符串做 `NFC` 规范化再查表转换成 `u16` 字形 ID；超范围字符回退为 `□`。屏幕端只在 GUI worker 且 `LCD_BUSY == 0` 时读取文件，**每次主循环最多读 4 个 52B 字形**，绝不在 UART 或按键回调里做文件 I/O；已缓存的歌名或上一轮的「下一句」位图会直接浅拷贝复用，内存分配失败时保留上一帧可用画面。
-- **页面切换机制**：歌词页渲染时接管原 GIF 下半屏；切回按键页时需等待底层重新解码出一整帧完整 `320×172` 底图，并通过检查像素 `(22, 39)` 是否不等于背景色来确认画面已就绪。
+OP30 level为0..100，muted为0/1，scope为0仅沉浸页/1全部页面，style为0中央提示/1沉浸页进度区，holdMs为400..3000。level=255立即取消；其他页面的style1回退为中央提示，按键页在原键帽区域绘制并恢复最近键。UART只改RAM；屏幕生成淡入、伸缩和淡出，不访问字库或素材文件。主机CoreAudio初始快照不触发提示，后续变化最多约每80ms发送最新值，过期事件和重连旧事件丢弃。发送复用歌词同一串行队列，在字形/封面任务间协作让出，不并发打开HID。
+
+OP27只在OP2暂停后接受，且字库句柄/缓存已释放；UART只校验请求并排队，不读写文件。GUI在LCD DMA空闲时只读固定`FONT.BIN`头部，核对magic/version、大小、记录的bodyCRC及头部CRC；关闭句柄，再调用原生FatFs unlink同一固定文件。OP5恢复会取消尚未执行的请求，避免遗留排队操作在后续上传中执行。接口不接收文件名，不提供格式化或任意文件删除。
+
+主机`AppClient.uploadFont(newBytes,{replaceConfirmed:true,replaceExisting:true,previousFont:oldBytes})`先完整验证两份本地R75F/2及新固件的编译CRC，再暂停、OP27、轮询完成、BEGIN/DATA/END，最后恢复。维护失败不会开始新文件上传；传输开始后失败才ABORT。首次安装不传`replaceExisting`和`previousFont`。替换有短暂无字库窗口，不能视为原子更新或完整旧文件读回校验。
+
+独立删除用`AppClient.deleteFont(currentBytes,{deleteConfirmed:true})`。确认值必须是布尔true；先验证当前本地R75F/2、HELLO及维护接口，再暂停、OP27、轮询真实结果，finally恢复。不比对新固件的编译字体CRC，因此新固件也能移除经过核对的旧字体；没有BEGIN/DATA/END，不修改其他素材文件。调用前退出歌词后台，删除后按键页可继续使用，歌词必须重新安装匹配字库。
+
+字体格式 R75F/2：256字节头，排序Unicode u32索引，每字52字节（advance/flags加20×20单色50字节）。固件编译绑定 count、offset、total和bodyCRC；电脑、固件、屏内 FONT.BIN须同源。UTF-8不直接发送到设备，后台NFC规范化后转字形索引；超出覆盖回退为方框。
+
+布局1从同一20px mask以整数2倍绘制40px当前句，标题保持20px；不生成40px堆位图、不增加字库文件或因切换布局重新读取字形。大字歌词在字幕卡片内横滚，换句纵向过渡裁剪在卡片内部。布局0保留原20px两行样式。布局2为40px当前句与20px下一句，布局3将当前句按字形边界换成最多16行，每页两行、按cue时长分页；前三套保持原有横滚。所有模板共用同一组mask。
+
+字形文件读取和位图生成只在GUI worker、LCD DMA不忙时处理，每轮最多四个52B字形读取。已有标题和预载下一句的不可变mask可复制复用，分配失败保持已发布画面。标题独立滚动，不受歌词换句或计时重置影响。
+
+歌词页接管原GIF下半屏，返回按键页要等真正解码的新完整帧。公开机器人每帧恢复完整320×172，像素(22,39)的RGB565颜色必须不同于主题背景；自定义动画必须满足此条件，构建器与素材测试会校验。
 
 ---
 
@@ -124,3 +123,5 @@ BE 1A LEN 0D OP ID_LO ID_HI 00 [PAYLOAD...] SUM_LO SUM_HI ED
 - **基础版 IPS**：代码区 `0x0807EC90..0x08080000`，模块 RAM `0x2005F000..0x20060000`，镜像大小 `507904` 字节。
 - **歌词版 IPS**：代码区 `0x08080000..0x08088000`（Bank2），镜像大小 `540672` 字节，依赖 `1024KiB` 片内 Flash 与已实测擦除终点为 `0x080C0000` 的 Bootloader，保留高地址 `0x080FC000`、`0x080FE000`、`0x080FF800` 的原厂设置区。
 - **键盘主控（CH585）**：代码接在原厂 APP 之后且不得越过 `0x49000`；`0x49000..0x49FFF` 为专用校时数据页，结构依次为 `magic (0x434C4B31)`、`cycles`、`seconds`、`rate`、`day`、`XOR check`（各 `u32`），后跟 `guard`。校时写入顺序是：擦除该页 → 写后 24 字节（包含 `guard = 0xFFFFFFFF`）→ **最后才写 4 字节 `magic`** → 读回核对，防止写入中途断电留下半截脏数据；检测到 RTC 计数回退时通过把 `guard` 写为 `0` 立即作废旧锚点。
+
+切页控制复用同一串行队列，在字形、封面和计时包之间协作处理，不并发请求HID；回到按键页不再准备新歌词。PC仅改变显示模式，不改播放器实际播放状态。

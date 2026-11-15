@@ -11,6 +11,8 @@ static struct {
  u32 pointer,object,time,key_at;
  u16 x,y,w,h,key;
  u8 active,suspended,has_surface,dirty,key_dirty,status_dirty,known,battery,charge,mode,modifiers;
+ u32 volume_tag;
+ u8 volume_visible;
 } ui;
 static u8 redraw;
 static u32 clock_ms(void){return ((u32(*)(void))0x0803a2bb)();}
@@ -31,8 +33,18 @@ static void text(unsigned slot,const u8 *s,unsigned n,unsigned scale){
  for(i=0;i<n;i++)for(j=0;j<7;j++)for(k=0;k<5;k++)if(cache_font[glyph_index(s[i])][j]&(16u>>k))
   for(dy=0;dy<scale;dy++)for(dx=0;dx<scale;dx++)dot(slot,x+(i*6+k)*scale+dx,y+j*scale+dy);
 }
+static void volume_dot(unsigned x,unsigned y,unsigned alpha){static const u8 noise[16]={0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5};if((unsigned)noise[(y&3u)*4u+(x&3u)]*16u<alpha)dot(0,x,y);}
+static void volume_key_mask(u16 progress,u8 level,u8 muted,u16 alpha){
+ u8 label[4];unsigned n=0,x,y,i,xx,yy,dx,dy,left,shift=(256u-alpha)*6u/256u,width;clear(0);
+ if(muted){label[n++]='-';label[n++]='-';}else{if(level>=100){label[n++]='1';label[n++]='0';label[n++]='0';}else{if(level>=10)label[n++]=(u8)('0'+level/10u);label[n++]=(u8)('0'+level%10u);}label[n++]='%';}
+ left=(ui_geo[0].w-16u)/2u;for(y=0;y<13;y++)for(x=0;x<16;x++)if(lyrics_volume_icon(x,y,muted||!level))volume_dot(left+x,7u+y+shift,alpha);
+ width=(n*6u-1u)*3u;left=ui_geo[0].w>width?(ui_geo[0].w-width)/2u:0;
+ for(i=0;i<n;i++)for(yy=0;yy<7;yy++)for(xx=0;xx<5;xx++)if(cache_font[glyph_index(label[i])][yy]&(16u>>xx))for(dy=0;dy<3;dy++)for(dx=0;dx<3;dx++)volume_dot(left+(i*6u+xx)*3u+dx,26u+yy*3u+dy+shift,alpha);
+ width=ui_geo[0].w>24?ui_geo[0].w-24u:ui_geo[0].w;for(x=0;x<width;x++)for(y=0;y<5;y++)if(x<(unsigned)progress*width/25600u||(y==4&&!(x&1u)))volume_dot(12u+x,61u+y,alpha);
+}
 static void key_mask(void){
  unsigned i,j,x,y,dx,dy,scale,k=ui.key;u8 s[4];const BigGlyph *g;
+ {u16 progress,alpha;u8 level,muted;if(lyrics_volume_key(clock_ms(),&progress,&level,&muted,&alpha)){volume_key_mask(progress,level,muted,alpha);return;}}
  if(k>=0xfff8u)k=(k&7u)+224u;
  if(k==231)k=227;
  for(i=0;i<sizeof big_glyphs/sizeof big_glyphs[0];i++)if(big_glyphs[i].key==k){
@@ -74,6 +86,7 @@ static void status_masks(void){
 }
 static void refresh(void){
  u32 t;u8 s[8];unsigned i,shift;
+ {u16 progress,alpha;u8 level,muted;int visible=lyrics_volume_key(clock_ms(),&progress,&level,&muted,&alpha);u32 tag=visible?((u32)level<<24)|((u32)(progress>>2)<<10)|((u32)alpha<<1)|muted:0;if((unsigned)visible!=ui.volume_visible||(visible&&tag!=ui.volume_tag))ui.key_dirty=1;ui.volume_visible=(u8)visible;ui.volume_tag=tag;}
  if(ui.key_dirty){key_mask();ui.key_dirty=0;ui.dirty=1;}
  if(ui.status_dirty){status_masks();ui.status_dirty=0;ui.dirty=1;}
  t=rtc_value();if(t!=ui.time){

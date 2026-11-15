@@ -1,10 +1,10 @@
 {
   "name": "rainy75v2-tft",
-  "version": "0.2.0-alpha.2",
+  "version": "0.2.0-alpha.4",
   "private": true,
   "license": "MIT",
   "description": "Rainy75 V2 native TFT UI, clock, and optional cached-font lyrics player",
-  "scripts": {"test": "node --test tests/protocol.test.mjs tests/hid.test.mjs tests/test_media.cjs tests/test_provider.cjs tests/desktop.test.cjs", "lyrics": "node desktop/launch.cjs", "lyrics:demo": "node desktop/bridge.cjs --demo"},
+  "scripts": {"test": "node --test tests/protocol.test.mjs tests/hid.test.mjs tests/test_media.cjs tests/test_provider.cjs tests/desktop.test.cjs tests/cover.test.cjs tests/volume.test.cjs tests/screen-control.test.cjs", "lyrics": "node desktop/launch.cjs", "lyrics:demo": "node desktop/bridge.cjs --demo"},
   "dependencies": {"node-hid": "3.4.0"},
   "engines": {"node": ">=22"}
 }
