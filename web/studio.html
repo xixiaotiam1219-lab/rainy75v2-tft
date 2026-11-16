@@ -1,0 +1,1169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rainy75 V2 屏幕定制助手</title>
+  <meta name="color-scheme" content="light dark">
+  <script>try{document.documentElement.dataset.appearance=localStorage.getItem('rainy75-appearance')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')}catch{document.documentElement.dataset.appearance='light'}</script>
+  <link rel="stylesheet" href="./studio.css">
+</head>
+<body>
+  <header class="studio-header">
+    <div class="header-inner">
+      <div class="brand-group">
+        <div class="brand-mark" aria-hidden="true">R75</div>
+        <div>
+          <div class="brand-title">Rainy75 V2 屏幕定制助手</div>
+          <div class="brand-sub">TFT SCREEN STUDIO</div>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span id="header-track-pill" class="pill pill-accent">当前方案：日常桌宠版</span>
+        <span id="header-device-pill" class="pill pill-muted">键盘：未连接</span>
+        <span id="header-bundle-pill" class="pill pill-muted">正在检查离线资源…</span>
+      </div>
+    </div>
+
+    <nav class="studio-tabs" role="tablist" aria-orientation="vertical" aria-label="屏幕工作台">
+      <button id="tab-btn-overview" class="tab-btn active" role="tab" aria-selected="true" data-tab="overview">
+        <span class="step-num">1</span><span>屏幕模式</span>
+      </button>
+      <button id="tab-btn-gif" class="tab-btn" role="tab" aria-selected="false" data-tab="gif">
+        <span class="step-num">2</span><span>桌宠动图</span>
+      </button>
+      <button id="tab-btn-theme" class="tab-btn" role="tab" aria-selected="false" data-tab="theme">
+        <span class="step-num">3</span><span>主题与排版</span>
+      </button>
+      <button id="tab-btn-deploy" class="tab-btn" role="tab" aria-selected="false" data-tab="deploy">
+        <span class="step-num">4</span><span>安装与维护</span>
+      </button>
+      <button id="tab-btn-background" class="tab-btn" role="tab" aria-selected="false" data-tab="background">
+        <span class="step-num">5</span><span>歌词后台</span>
+      </button>
+    </nav>
+  </header>
+
+  <a class="skip-link" href="#panel-overview">跳到工作区</a>
+  <main class="studio-main">
+    <div class="workspace-toolbar">
+      <span class="toolbar-caption"></span>
+      <div class="btn-row">
+        <button id="btn-workspace-help" class="btn" type="button" aria-expanded="false" aria-controls="workspace-help">帮助</button>
+        <button id="btn-appearance" class="btn" type="button" title="切换页面外观">页面外观</button>
+      </div>
+    </div>
+    <div id="free-distribution-notice" class="banner banner-warn">
+      <strong>免费项目，严禁倒卖。</strong>
+      <a href="https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/v0.2.0-alpha.6" target="_blank" rel="noopener noreferrer">简易部署脚本下载</a>
+    </div>
+    <div id="workspace-help" class="banner banner-info hidden">
+      <strong>第一次使用</strong>
+      <p>选择屏幕模式，按需修改桌宠和配色，然后进入「安装与维护」。用 USB 连接键盘本体并切到有线模式，退出 WOBHub 和歌词后台。</p>
+      <p>核对安装清单后开始。进入升级模式时，浏览器需要你再次选择设备；这属于正常授权步骤。基础页安装后即可独立使用，歌词页则需启动后台。</p>
+      <p>完整说明位于发布包的「说明文档」文件夹。</p>
+    </div>
+    <div id="file-protocol-banner" class="banner banner-info hidden" role="status">
+      <strong> 小提示（当前为直接双击本地文件打开）：</strong>
+      浏览器通常允许在这里做预览、做 GIF 和调色；但如果您点击「连接键盘」没弹出选择窗口，或想从网页一键开关电脑歌词助手，请改用文件夹里的
+      <code>1-打开工作台（推荐点我）.cmd</code> 启动，再按自动弹出的网页操作即可。
+    </div>
+
+    <div id="global-toast" class="banner banner-toast hidden" role="status" aria-live="polite"></div>
+
+    <!-- ==================== TAB 1: CHOOSE MODE & LIVE PREVIEW ==================== -->
+    <section id="panel-overview" class="tab-panel active" data-tab="overview" role="tabpanel">
+      <div class="hero-stage card">
+        <div class="hero-stage-copy">
+
+          <h1>选择屏幕功能</h1>
+
+
+          <div class="goal-choices" role="radiogroup" aria-label="想安装哪些功能">
+            <button class="goal-choice active" data-goal="A" type="button" role="radio" aria-checked="true">
+              <strong>桌宠与按键</strong><span>按键 / 时钟 / 电量，无需后台</span>
+            </button>
+            <button class="goal-choice" data-goal="C" type="button" role="radio" aria-checked="false">
+              <strong>再加一个播放器</strong><span>包含桌宠，USB 同步歌词与封面</span>
+            </button>
+          </div>
+          <div class="hero-actions">
+            <button id="btn-hero-direct-deploy" class="btn btn-primary btn-lg" type="button">连接键盘 →</button>
+            <button id="btn-hero-next-gif" class="btn btn-lg" type="button">自定义桌宠</button>
+          </div>
+          <p class="hint"></p>
+        </div>
+
+        <div class="hero-stage-bezel">
+          <div class="bezel-frame">
+            <div class="canvas-frame screen-stage-box" id="hero-ctrlf8-stage">
+              <img class="stage-img active" data-slide="keys" src="../assets/preview-pink.png" alt="基础屏幕版动态桌宠与按键示意">
+              <canvas id="hero-keys-canvas" class="stage-img active" data-slide="keys" width="320" height="172" aria-label="基础屏幕版实时动画示意"></canvas>
+              <img class="stage-img" data-slide="layout0" src="../assets/player-pink.png" alt="布局0 原版双行歌词示意">
+              <img class="stage-img" data-slide="layout1" src="../assets/player-pink-20.png" alt="布局1 04大字字幕示意">
+              <img class="stage-img" data-slide="layout2" src="../assets/player-pink-focus.png" alt="布局2 大字聚焦示意">
+              <img class="stage-img" data-slide="layout3" src="../assets/player-pink-double.png" alt="布局3 双行大字示意">
+              <img class="stage-img" data-slide="layout4" src="../assets/player-pink-immersive.png" alt="布局4 全屏沉浸封面示意">
+              <img class="stage-img" data-slide="volume" src="../assets/player-pink-volume.png" alt="布局4 系统音量弹窗示意">
+              <div id="hero-scanline" class="lcd-sweep" aria-hidden="true"></div>
+            </div>
+            <div class="bezel-caption">
+              <span class="bezel-brand">320 × 172 / 软件预览</span>
+              <span id="hero-bezel-note" class="bezel-tip">播放器需 USB 后台</span>
+            </div>
+          </div>
+
+          <div class="hero-screen-bar">
+            <div class="ctrlf8-dots" role="group" aria-label="Ctrl+F8 切屏画面指示">
+              <button class="carousel-dot active" type="button" data-hero-slide="keys" title="桌宠按键页" aria-label="桌宠按键页"></button>
+              <button class="carousel-dot" type="button" data-hero-slide="layout0" title="0 原版双行" aria-label="0 原版双行"></button>
+              <button class="carousel-dot" type="button" data-hero-slide="layout1" title="1 04大字" aria-label="1 04大字"></button>
+              <button class="carousel-dot" type="button" data-hero-slide="layout2" title="2 大字聚焦" aria-label="2 大字聚焦"></button>
+              <button class="carousel-dot" type="button" data-hero-slide="layout3" title="3 双行大字" aria-label="3 双行大字"></button>
+              <button class="carousel-dot" type="button" data-hero-slide="layout4" title="4 全屏沉浸" aria-label="4 全屏沉浸"></button>
+              <button class="carousel-dot" type="button" data-hero-slide="volume" title="系统音量弹窗" aria-label="系统音量弹窗"></button>
+            </div>
+            <div class="ctrlf8-bar">
+              <button id="btn-hero-ctrlf8" class="btn btn-sm btn-primary ctrlf8-btn" type="button">
+                下一张预览
+              </button>
+              <button id="btn-hero-autoplay" class="btn btn-sm" type="button">自动轮播</button>
+              <span id="hero-slide-label" class="pill pill-accent">预览 1 / 7 · 按键与像素桌宠</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <details id="screen-examples" class="card"><summary>看看全部模板与效果演示</summary><div class="details-body">
+      <div class="track-grid" role="radiogroup" aria-label="屏幕方案选择">
+        <!-- Card A -->
+        <article id="track-card-A" class="track-card active" data-track="A" tabindex="0" role="radio" aria-checked="true">
+          <div class="track-head">
+            <span class="track-badge">基础功能 / 无需电脑后台</span>
+            <span class="track-tag">脱离电脑也能用</span>
+          </div>
+          <h2>基础屏幕版</h2>
+          <p class="track-desc">装好以后<strong>日常完全不用开电脑软件</strong>。显示大按键回显、实时时钟、电量、连接图标，右边住着一只会动的像素桌宠。</p>
+
+          <div class="mini-bezel-wrap">
+            <div class="bezel-frame bezel-sm">
+              <div class="canvas-frame card-screen-box" id="card-box-A">
+                <img class="card-demo-img active" data-robot-demo="pink" src="../assets/preview-pink.png" alt="基础屏幕版樱花粉动态桌宠示意">
+                <img class="card-demo-img" data-robot-demo="mint" src="../assets/preview-mint.png" alt="基础屏幕版薄荷绿动态桌宠示意">
+                <img class="card-demo-img" data-robot-demo="mono" src="../assets/preview-mono.png" alt="基础屏幕版墨水灰动态桌宠示意">
+                <canvas id="card-preview-A" class="mini-screen-canvas" width="320" height="172" aria-label="基础屏幕版实时交互预览"></canvas>
+              </div>
+            </div>
+            <div class="mini-toy-bar" role="group" aria-label="试看基础版主题动画与按键">
+              <span class="toy-label">点按看动图/键帽：</span>
+              <button class="toy-chip active" type="button" data-card-a-demo="pink"> 粉机器人</button>
+              <button class="toy-chip" type="button" data-card-a-demo="mint"> 绿机器人</button>
+              <button class="toy-chip" type="button" data-card-a-demo="mono"> 灰机器人</button>
+              <button class="toy-chip" type="button" data-card-key="4">试按 A</button>
+              <button class="toy-chip" type="button" data-card-key="44">Space</button>
+            </div>
+          </div>
+
+          <ul class="track-points">
+            <li>不用传 2.4MB 中文字库，也不占用电脑后台</li>
+            <li>支持已核对的 Rainy75 V2 屏幕，安装前检查兼容性</li>
+            <li>仅首次使用或彻底断电后接有线校准一次时间</li>
+          </ul>
+          <div class="track-foot">
+            <span class="track-selected-mark"> 当前已选 · 只装基础屏幕版</span>
+          </div>
+        </article>
+
+        <!-- Card B -->
+        <article id="track-card-B" class="track-card" data-track="B" tabindex="0" role="radio" aria-checked="false">
+          <div class="track-head">
+            <span class="track-badge">完整播放器 / 默认经典布局</span>
+            <span class="track-tag">Ctrl+F8 切回桌宠/沉浸</span>
+          </div>
+          <h2>传统歌词播放器</h2>
+          <p class="track-desc">刷入完整扩展固件：<strong>机内保留基础桌宠页与全屏沉浸页</strong>，重点使用上方带时钟和电量的 4 种经典歌词模板。</p>
+
+          <div class="mini-bezel-wrap">
+            <div class="bezel-frame bezel-sm">
+              <div class="canvas-frame card-screen-box" id="card-box-B">
+                <img class="card-demo-img active" data-b-slide="layout0" src="../assets/player-pink.png" alt="0 原版双行示意">
+                <img class="card-demo-img" data-b-slide="layout1" src="../assets/player-pink-20.png" alt="1 04大字字幕示意">
+                <img class="card-demo-img" data-b-slide="layout2" src="../assets/player-pink-focus.png" alt="2 大字聚焦示意">
+                <img class="card-demo-img" data-b-slide="layout3" src="../assets/player-pink-double.png" alt="3 双行大字示意">
+                <canvas id="card-preview-B" class="mini-screen-canvas hidden" width="320" height="172" aria-label="传统歌词播放器实时预览"></canvas>
+                <div class="mini-bar-pulse" aria-hidden="true"></div>
+              </div>
+            </div>
+            <div class="mini-toy-bar" role="group" aria-label="点选切换 4 套传统歌词示意图">
+              <button class="toy-chip active" type="button" data-card-b-layout="layout0">0 原版双行</button>
+              <button class="toy-chip" type="button" data-card-b-layout="layout1">1 04大字</button>
+              <button class="toy-chip" type="button" data-card-b-layout="layout2">2 大字聚焦</button>
+              <button class="toy-chip" type="button" data-card-b-layout="layout3">3 双行大字</button>
+            </div>
+          </div>
+
+          <ul class="track-points">
+            <li>按 <code>Ctrl+F8</code> 在「桌宠按键页 ↔ 4套经典歌词 ↔ 全屏沉浸」间循环</li>
+            <li>安装前会自动只读检查屏幕为支持扩展的大容量硬件</li>
+            <li>歌词和封面通过 USB 有线 + 歌词后台同步</li>
+          </ul>
+          <div class="track-foot">
+            <span class="track-selected-mark">点击选择（三模共存 · 经典样式优先）</span>
+          </div>
+        </article>
+
+        <!-- Card C -->
+        <article id="track-card-C" class="track-card" data-track="C" tabindex="0" role="radio" aria-checked="false">
+          <div class="track-head">
+            <span class="track-badge">完整播放器 / 默认沉浸布局</span>
+            <span class="track-tag">Ctrl+F8 切回桌宠/经典歌词</span>
+          </div>
+          <h2>沉浸播放器与音量增强</h2>
+          <p class="track-desc">与传统歌词共用同一套固件，默认打开<strong>封面取色的沉浸页</strong>。调节系统音量时可显示短暂提示。</p>
+
+          <div class="mini-bezel-wrap">
+            <div class="bezel-frame bezel-sm">
+              <div class="canvas-frame card-screen-box" id="card-box-C">
+                <img id="card-c-img-base" class="card-demo-img active" src="../assets/player-pink-immersive.png" alt="全屏沉浸歌词示意">
+                <img id="card-c-img-vol" class="card-demo-img" src="../assets/player-pink-volume.png" alt="沉浸播放器系统音量弹窗示意">
+                <canvas id="card-preview-C" class="mini-screen-canvas hidden" width="320" height="172" aria-label="沉浸播放器实时预览"></canvas>
+              </div>
+            </div>
+            <div class="mini-toy-bar" role="group" aria-label="试用沉浸版字体和音量弹窗">
+              <button class="toy-chip" type="button" data-card-c-size="20">20px</button>
+              <button class="toy-chip active" type="button" data-card-c-size="30">30px</button>
+              <button class="toy-chip" type="button" data-card-c-size="40">40px</button>
+              <button id="btn-card-c-vol-demo" class="toy-chip" type="button"> 试弹音量条</button>
+            </div>
+          </div>
+
+          <ul class="track-points">
+            <li>支持 20 / 30 / 40px 字号（默认 30px 清晰好看），按 <code>Ctrl+F8</code> 仍可切回基础页</li>
+            <li>系统音量弹窗位置（居中/底部）、生效范围与停留时间都能调</li>
+            <li>同样需大容量屏幕 + USB 有线连接电脑小助手同步歌名与音量</li>
+          </ul>
+          <div class="track-foot">
+            <span class="track-selected-mark">点击选择（三模共存 · 全屏沉浸优先）</span>
+          </div>
+        </article>
+      </div>
+
+      </div></details>
+      <details id="environment-details" class="card"><summary>当前方案与运行环境</summary><div class="details-body">
+      <div class="two-col overview-lower">
+        <article class="card">
+          <div class="card-header">
+            <h3>当前方案会为您做什么？</h3>
+            <span id="overview-track-chip" class="pill pill-accent">日常桌宠版</span>
+          </div>
+          <div id="overview-plan-summary" class="summary-box"></div>
+          <div class="btn-row">
+            <button id="btn-goto-gif" class="btn btn-primary" type="button">下一步：换桌宠动图 →</button>
+            <button id="btn-goto-theme" class="btn" type="button">调色盘与屏幕预览</button>
+            <button id="btn-goto-deploy" class="btn" type="button">去连接键盘安装</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-header">
+            <h3>开始前的小检查</h3>
+            <span id="overview-webhid-chip" class="pill pill-muted">正在检查浏览器…</span>
+          </div>
+          <dl class="kv-list friendly-kv">
+            <div><dt>连接键盘能力</dt><dd id="overview-webhid-text">--</dd></div>
+            <div><dt>内置安装包</dt><dd id="overview-bundle-text">--</dd></div>
+            <div><dt>电脑歌词小助手</dt><dd id="overview-bg-text">检查中…</dd></div>
+          </dl>
+          <div class="btn-row">
+            <button id="btn-overview-bg-start" class="btn" type="button">打开歌词小助手</button>
+            <button id="btn-overview-bg-stop" class="btn btn-warn" type="button">暂停小助手（刷机前点我）</button>
+            <button id="btn-goto-background" class="btn" type="button">查看小助手详情</button>
+          </div>
+          <p class="hint">贴心提示：写入固件或对时前，请先关掉 WOB 官方驱动页面，并把“电脑歌词小助手”暂停，避免两边同时抢着连键盘。</p>
+        </article>
+      </div>
+      </div></details>
+    </section>
+
+    <!-- ==================== TAB 2: GIF STUDIO ==================== -->
+    <section id="panel-gif" class="tab-panel hidden" data-tab="gif" role="tabpanel">
+      <div class="section-head">
+        <div>
+
+          <h1>桌宠动图</h1>
+          <p class="lead">选一张动图，拖动调整位置。</p>
+        </div>
+        <span class="pill pill-safe">本地处理</span>
+      </div>
+
+      <div class="two-col gif-grid">
+        <!-- Left: Interactive Screen Canvas + Player + Compatibility -->
+        <div class="col-stack">
+          <article id="gif-drop-stage" class="card preview-stage-card">
+            <div class="card-header">
+              <h3>预览</h3>
+              <span id="gif-dims-badge" class="pill pill-muted">320×172</span>
+            </div>
+
+            <div class="bezel-frame">
+              <div class="canvas-frame canvas-interactive" id="gif-preview-frame" title="按住拖动桌宠位置，滚动滚轮放大缩小">
+                <canvas id="gif-preview-canvas" width="320" height="172" aria-label="桌宠 GIF 320×172 合成预览"></canvas>
+              </div>
+              <div class="bezel-caption">
+                <span class="bezel-brand">RAINY75 V2 · TFT</span>
+                <span id="gif-drag-tip" class="bezel-tip"> 画面内按住可拖动位置 · 滚轮可缩放</span>
+              </div>
+            </div>
+
+            <div class="player-bar">
+              <button id="btn-gif-play" class="btn" type="button">暂停</button>
+              <input id="gif-scrubber" type="range" min="0" max="0" value="0" aria-label="动图播放进度条">
+              <span id="gif-frame-counter" class="mono">1 / 1</span>
+              <span id="gif-fps-readout" class="mono-note">-- ms</span>
+            </div>
+            <div class="player-subbar">
+              <label class="inline-field">播放速度
+                <input id="gif-speed" type="range" min="0.25" max="3.0" step="0.05" value="1.0">
+                <span id="gif-speed-val" class="mono">1.00x</span>
+              </label>
+              <label class="check"><input id="gif-loop" type="checkbox" checked> 一直循环播</label>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-header">
+              <h3>原图</h3>
+              <span id="gif-eyedropper-hint" class="pill pill-muted">点右边「吸掉背景色」后点下图</span>
+            </div>
+            <div class="source-preview-row">
+              <canvas id="gif-source-canvas" width="160" height="120" aria-label="原图取色预览"></canvas>
+              <div class="source-meta">
+                <div id="gif-source-info" class="mono-note">内置机器人</div>
+                <div id="gif-sampled-color" class="swatch-line">
+                  <span id="gif-sampled-chip" class="mini-swatch"></span>
+                  <span id="gif-sampled-hex" class="mono">未点击吸色</span>
+                </div>
+                <p class="hint">如果你的图带白色或绿色背景，开启右侧去背景并点击这里就能变透明。</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="card" id="gif-audit-card">
+            <div class="card-header">
+              <h3>素材检查</h3>
+              <span id="gif-audit-badge" class="pill pill-muted">准备中</span>
+            </div>
+            <dl class="kv-list">
+              <div><dt>动图体积</dt><dd id="audit-size">--</dd></div>
+              <div class="help-copy"><dt>屏幕格式与防闪烁检查</dt><dd id="audit-format">--</dd></div>
+              <div class="help-copy"><dt>按键切页识别点</dt><dd id="audit-marker">--</dd></div>
+              <div><dt>体检结论</dt><dd id="audit-detail">--</dd></div>
+            </dl>
+            <div class="btn-row">
+              <button id="btn-gif-use-deploy" class="btn btn-primary" type="button">使用这张动图</button>
+              <button id="btn-gif-download" class="btn" type="button">导出 GIF</button>
+              <button id="btn-gif-next-theme" class="btn" type="button">调整配色 →</button>
+            </div>
+            <details class="mini-details">
+              <summary>已连好键盘？也可以不进向导直接换这张桌宠</summary>
+              <div class="s1-direct-box">
+                <label class="check"><input id="gif-confirm-s1" type="checkbox"> 确认覆盖键盘当前保存的桌宠动画</label>
+                <button id="btn-gif-upload-s1" class="btn" type="button" disabled>立刻传到已连好的键盘</button>
+              </div>
+            </details>
+          </article>
+        </div>
+
+        <!-- Right: Friendly Controls -->
+        <div class="col-stack">
+          <article class="card">
+            <div class="card-header">
+              <h3>导入自己的动图，或选内置原创机器人</h3>
+            </div>
+            <div class="upload-zone">
+              <label class="file-btn btn btn-primary">
+                导入图片或动图
+                <input id="gif-file-input" type="file" accept=".gif,image/gif,image/png,image/jpeg,image/webp">
+              </label>
+              <span id="gif-file-name" class="mono-note">当前使用：内置原创像素机器人（MIT 许可）</span>
+            </div>
+            <div class="preset-row">
+              <span class="field-label">快捷试用内置机器人：</span>
+              <button id="btn-gif-preset-pink" class="btn preset-btn" type="button" data-robot="pink"> 樱花粉</button>
+              <button id="btn-gif-preset-mint" class="btn preset-btn" type="button" data-robot="mint"> 薄荷绿</button>
+              <button id="btn-gif-preset-mono" class="btn preset-btn" type="button" data-robot="mono"> 墨水灰</button>
+            </div>
+            <details id="pet-ai-help" class="mini-details">
+              <summary>让 AI 帮我设计</summary>
+              <div class="details-body">
+                <label class="field"><span>想做什么桌宠？</span><input id="pet-ai-idea" type="text" maxlength="160" placeholder="例如：会眨眼的小白猫，像素风"></label>
+                <textarea id="pet-ai-prompt" rows="9" readonly aria-label="桌宠定制 AI 提示词"></textarea>
+                <div class="btn-row">
+                  <button id="btn-copy-pet-prompt" class="btn btn-primary" type="button">复制提示词</button>
+                  <button id="btn-download-pet-prompt" class="btn" type="button">下载文本</button>
+                </div>
+                <div id="pet-ai-feedback" class="mono-note" role="status"></div>
+              </div>
+            </details>
+          </article>
+
+          <article class="card">
+            <div class="card-header">
+              <h3>摆放在屏幕哪个位置？</h3>
+              <button id="btn-gif-reset-pos" class="btn btn-sm" type="button">一键复位</button>
+            </div>
+
+            <div class="field-block">
+              <span class="field-label">快速排版方式</span>
+              <div class="pill-group" role="group" aria-label="桌宠排版预设">
+                <button id="place-pet-right" class="pill-btn active" type="button" data-place="pet-right">右侧</button>
+                <button id="place-center" class="pill-btn" type="button" data-place="center">居中</button>
+                <button id="place-fullscreen" class="pill-btn" type="button" data-place="fullscreen">全屏</button>
+              </div>
+            </div>
+
+            <div class="slider-stack">
+              <label class="slider-field">
+                <span>缩放大小：<strong id="gif-scale-val" class="mono">1.00x</strong></span>
+                <input id="gif-scale" type="range" min="0.2" max="3.0" step="0.05" value="1.0">
+              </label>
+              <div class="config-grid">
+                <label class="slider-field">
+                  <span>左右微调：<strong id="gif-offsetx-val" class="mono">0</strong> px</span>
+                  <input id="gif-offset-x" type="range" min="-160" max="160" step="1" value="0">
+                </label>
+                <label class="slider-field">
+                  <span>上下微调：<strong id="gif-offsety-val" class="mono">0</strong> px</span>
+                  <input id="gif-offset-y" type="range" min="-86" max="86" step="1" value="0">
+                </label>
+              </div>
+            </div>
+
+            <div class="check-grid">
+              <label class="check"><input id="gif-overlay-bezel" type="checkbox" checked> 保留标准边框与按键方框</label>
+              <label class="check"><input id="gif-flip-x" type="checkbox"> 水平左右镜像转身</label>
+              <label class="check"><input id="gif-enable-alpha" type="checkbox" checked> 保留原图透明区域</label>
+            </div>
+
+            <details class="mini-details">
+              <summary>画面裁剪方式与最多保留帧数设置</summary>
+              <div class="config-grid details-top-gap">
+                <label class="field">
+                  <span>画面缩放规则</span>
+                  <select id="gif-fit">
+                    <option value="contain">完整放进框里（不裁边）</option>
+                    <option value="cover">填满区域（自动裁掉多余边）</option>
+                    <option value="crop">原像素居中裁剪</option>
+                    <option value="stretch">按比例强行拉伸铺满</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>最多抽帧上限 (1..60 帧)</span>
+                  <input id="gif-max-frames" type="number" min="1" max="60" value="60">
+                </label>
+              </div>
+            </details>
+          </article>
+
+          <article class="card">
+            <div class="card-header">
+              <h3>换背景底色 / 去掉纯色背景 / 提取配色</h3>
+            </div>
+            <div class="config-grid">
+              <label class="field">
+                <span>空白区域填什么底色？</span>
+                <select id="gif-bg-mode">
+                  <option value="theme">自动跟随我选的主题色（最协调）</option>
+                  <option value="custom">我自己挑纯色背景</option>
+                  <option value="matte">深色雾面底色</option>
+                </select>
+              </label>
+              <label id="gif-custom-bg-wrap" class="field hidden">
+                <span>点击选择纯色底色</span>
+                <input id="gif-custom-bg" type="color" value="#fff1f6">
+              </label>
+            </div>
+
+            <div class="check-grid">
+              <label class="check"><input id="gif-bg-blur" type="checkbox"> 把图虚化当雾面背景（适合人物/照片）</label>
+            </div>
+
+            <hr class="divider">
+
+            <div class="chroma-controls">
+              <label class="check"><input id="gif-chroma-enabled" type="checkbox"> 自动抠除图片上的纯色底（白底 / 绿幕变透明）</label>
+              <div class="config-grid">
+                <label class="field">
+                  <span>要去掉的颜色</span>
+                  <div class="color-combo">
+                    <input id="gif-chroma-color" type="color" value="#00ff00">
+                    <input id="gif-chroma-hex" type="text" value="#00ff00" maxlength="7">
+                  </div>
+                </label>
+                <label class="slider-field">
+                  <span>抠图范围宽容度：<strong id="gif-chroma-tol-val" class="mono">32</strong></span>
+                  <input id="gif-chroma-tolerance" type="range" min="0" max="120" step="1" value="32">
+                </label>
+              </div>
+              <button id="btn-gif-eyedropper" class="btn" type="button"> 点完我，再去左图点一下要抠掉的颜色</button>
+            </div>
+
+            <hr class="divider">
+
+            <div class="palette-extract-block">
+              <div class="row-between">
+                <div>
+                  <strong>从素材提取主题色</strong>
+                  <div class="hint">提取几块好看的颜色，点一下色块就会用它生成整套屏幕配色。</div>
+                </div>
+                <button id="btn-gif-extract-palette" class="btn" type="button"> 从图里提取配色</button>
+              </div>
+              <div id="gif-extracted-palette" class="swatch-strip">
+                <span class="hint">点击「从图里提取配色」即可获得桌宠同款色块。</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: COLOR WHEEL & SCREEN PREVIEW ==================== -->
+    <section id="panel-theme" class="tab-panel hidden" data-tab="theme" role="tabpanel">
+      <div class="section-head">
+        <div>
+
+          <h1>主题配色</h1>
+          <p class="lead">选择配色，右侧实时预览。</p>
+        </div>
+      </div>
+
+      <div class="banner banner-info help-copy">
+        <strong> 小提醒（哪些改动要重新写进键盘）：</strong>
+        只换歌词排版的 0~4 样式、字号、音量提示位置和停留时间，随时在电脑小助手切换即可<strong>不需要重刷屏幕</strong>；如果你通过色盘更换了屏幕颜色，后面点击安装时向导会自动帮你快速更新一次屏幕颜色。
+      </div>
+
+      <div class="two-col theme-grid">
+        <!-- Left: Friendly Interactive Color Wheel -->
+        <div class="col-stack">
+          <article class="card">
+            <div class="card-header">
+              <h3>配色</h3>
+              <span id="theme-name-badge" class="pill pill-accent">樱花粉</span>
+            </div>
+
+            <div class="preset-hero-row">
+              <button id="btn-theme-pink" class="preset-pill" type="button" data-preset="pink">
+                <span class="dot" style="background:#d58eae"></span> 樱花粉
+              </button>
+              <button id="btn-theme-mint" class="preset-pill" type="button" data-preset="mint">
+                <span class="dot" style="background:#38987b"></span> 薄荷绿
+              </button>
+              <button id="btn-theme-mono" class="preset-pill" type="button" data-preset="mono">
+                <span class="dot" style="background:#4b515a"></span> 墨水灰
+              </button>
+            </div>
+
+            <div class="wheel-layout">
+              <div class="wheel-box">
+                <canvas id="theme-color-wheel" width="220" height="220" aria-label="交互式 HSV 色盘"></canvas>
+              </div>
+              <div class="wheel-controls">
+                <label class="slider-field">
+                  <span>整体明暗度：<strong id="theme-wheel-val-readout" class="mono">92%</strong></span>
+                  <input id="theme-wheel-value" type="range" min="10" max="100" step="1" value="92">
+                </label>
+                <label class="field">
+                  <span>主颜色代码</span>
+                  <div class="color-combo">
+                    <span id="theme-seed-swatch" class="mini-swatch"></span>
+                    <input id="theme-seed-hex" type="text" value="#d58eae" maxlength="7">
+                  </div>
+                </label>
+                <label class="field">
+                  <span>喜欢的搭配氛围</span>
+                  <select id="theme-harmonic-tone">
+                    <option value="soft">浅色温柔马卡龙</option>
+                    <option value="vivid">鲜明通透高对比</option>
+                    <option value="dark">深邃暗调夜光风</option>
+                  </select>
+                </label>
+                <button id="btn-generate-harmonic" class="btn btn-primary" type="button">生成配色</button>
+              </div>
+            </div>
+
+            <div id="theme-contrast-box" class="contrast-box"></div>
+            <div class="theme-next-bar">
+              <span id="theme-r75t-status" class="pill pill-muted">默认预设</span>
+              <span id="theme-r75t-desc" class="hint"></span>
+            </div>
+          </article>
+        </div>
+
+        <!-- Right: Framed Interactive Screen Simulator -->
+        <div class="col-stack">
+          <article class="card preview-stage-card">
+            <div class="card-header">
+              <h3>预览</h3>
+              <span id="theme-preview-view-badge" class="pill pill-muted">按键与桌宠页</span>
+            </div>
+
+            <div class="bezel-frame">
+              <div class="canvas-frame">
+                <canvas id="theme-preview-canvas" width="320" height="172" aria-label="320×172 屏幕软件模拟预览"></canvas>
+              </div>
+              <div class="bezel-caption">
+                <span class="bezel-brand">RAINY75 V2 · LIVE PREVIEW</span>
+                <span class="bezel-tip">实际屏幕色彩接近此处近似效果</span>
+              </div>
+            </div>
+
+            <div class="field-block">
+              <span class="field-label">切换想预览的页面</span>
+              <div class="pill-group" role="group" aria-label="屏幕预览页面">
+                <button class="pill-btn preview-view-btn active" type="button" data-view="keys">按键与桌宠页</button>
+                <button class="pill-btn preview-view-btn" type="button" data-view="layout0">0 原版双行</button>
+                <button class="pill-btn preview-view-btn" type="button" data-view="layout1">1 04大字</button>
+                <button class="pill-btn preview-view-btn" type="button" data-view="layout2">2 大字聚焦</button>
+                <button class="pill-btn preview-view-btn" type="button" data-view="layout3">3 双行大字</button>
+                <button class="pill-btn preview-view-btn" type="button" data-view="layout4">4 全屏沉浸</button>
+              </div>
+            </div>
+
+            <div id="preview-keys-controls" class="preview-subpanel">
+              <div class="row-between">
+                <span class="field-label">点按下面模拟键帽，看屏幕如何亮起大字母</span>
+                <label class="check"><input id="preview-use-gif-bg" type="checkbox" checked> 融合桌宠工作室的桌宠动画</label>
+              </div>
+              <div class="keycap-toy-row" role="group" aria-label="虚拟键帽试用">
+                <button class="keycap-btn" type="button" data-keycap="0">空闲</button>
+                <button class="keycap-btn active" type="button" data-keycap="227">Win</button>
+                <button class="keycap-btn" type="button" data-keycap="4">A</button>
+                <button class="keycap-btn" type="button" data-keycap="40">Enter</button>
+                <button class="keycap-btn" type="button" data-keycap="44">Space</button>
+                <button class="keycap-btn" type="button" data-keycap="82">↑</button>
+                <button class="keycap-btn" type="button" data-keycap="81">↓</button>
+                <button class="keycap-btn" type="button" data-keycap="80">←</button>
+                <button class="keycap-btn" type="button" data-keycap="79">→</button>
+              </div>
+              <label class="field">
+                <span>或从完整列表中选按键</span>
+                <select id="preview-key-select">
+                  <option value="0">-- (空闲)</option>
+                  <option value="4">A</option>
+                  <option value="40">Enter</option>
+                  <option value="42">Backspace</option>
+                  <option value="44">Space</option>
+                  <option value="227" selected>Windows (Win)</option>
+                  <option value="82">Up (上)</option>
+                  <option value="81">Down (下)</option>
+                  <option value="80">Left (左)</option>
+                  <option value="79">Right (右)</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="preview-lyrics-controls" class="preview-subpanel hidden">
+              <div class="config-grid">
+                <label class="field"><span>测试歌名</span><input id="preview-song-title" type="text" value="Rainy75 Pixel Radio"></label>
+                <label class="field"><span>当前唱到的歌词</span><input id="preview-lyric-current" type="text" value="Pixels move with the beat"></label>
+              </div>
+              <div class="config-grid">
+                <label class="field"><span>下一句预览</span><input id="preview-lyric-next" type="text" value="Next line preview"></label>
+                <label class="slider-field">
+                  <span>歌曲进度条：<strong id="preview-progress-val" class="mono">38%</strong></span>
+                  <input id="preview-progress" type="range" min="0" max="100" value="38">
+                </label>
+              </div>
+            </div>
+
+            <div id="preview-modec-controls" class="preview-subpanel hidden">
+              <div class="row-between">
+                <strong>沉浸歌词样式与专辑封面模拟</strong>
+              </div>
+              <div class="config-grid">
+                <div class="field-block">
+                  <span class="field-label">歌词字号大小</span>
+                  <div class="pill-group">
+                    <button class="pill-btn preview-size-btn" type="button" data-size="20">20px 小巧</button>
+                    <button class="pill-btn preview-size-btn active" type="button" data-size="30">30px 推荐</button>
+                    <button class="pill-btn preview-size-btn" type="button" data-size="40">40px 超大</button>
+                  </div>
+                </div>
+                <div class="field-block">
+                  <span class="field-label">30px 字体边缘风格</span>
+                  <div class="pill-group">
+                    <button class="pill-btn preview-style-btn active" type="button" data-style="crisp">清晰锐利</button>
+                    <button class="pill-btn preview-style-btn" type="button" data-style="soft">柔和顺滑</button>
+                  </div>
+                </div>
+              </div>
+              <div class="config-grid">
+                <label class="check"><input id="preview-cover-active" type="checkbox" checked> 开启封面小图与背景雾面取色</label>
+                <label class="field">
+                  <span>试试不同封面色调背景</span>
+                  <input id="preview-cover-tint" type="color" value="#3c5a7a">
+                </label>
+              </div>
+            </div>
+
+            <details class="mini-details"><summary>音量提示预览</summary><div class="details-body">
+              <div class="row-between">
+                <strong> 系统音量弹窗效果试试看</strong>
+                <label class="check"><input id="preview-vol-visible" type="checkbox"> 预览音量弹出效果</label>
+              </div>
+              <div class="config-grid">
+                <label class="field">
+                  <span>弹窗出现位置</span>
+                  <select id="preview-vol-style">
+                    <option value="0">0 · 屏幕正中圆角小胶囊</option>
+                    <option value="1">1 · 底部替换进度条位置</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>什么时候弹出来？</span>
+                  <select id="preview-vol-scope">
+                    <option value="0">仅在沉浸歌词界面弹出</option>
+                    <option value="1">看任何页面时都弹出</option>
+                  </select>
+                </label>
+              </div>
+              <div class="config-grid">
+                <label class="slider-field">
+                  <span>模拟音量大小：<strong id="preview-vol-level-val" class="mono">72%</strong></span>
+                  <input id="preview-vol-level" type="range" min="0" max="100" value="72">
+                </label>
+                <label class="slider-field">
+                  <span>停留时间：<strong id="preview-vol-hold-val" class="mono">1000 ms</strong></span>
+                  <input id="preview-vol-hold" type="range" min="400" max="3000" step="100" value="1000">
+                </label>
+              </div>
+              <label class="check"><input id="preview-vol-muted" type="checkbox"> 模拟静音图标</label>
+            </div></details>
+
+            <div class="btn-row">
+              <button id="btn-theme-next-deploy" class="btn btn-primary" type="button">安装到键盘 →</button>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <!-- Collapsible Advanced Customizer -->
+      <details id="keys-design-details" class="card details-wide">
+        <summary> 高级定制与方案导入导出</summary>
+        <div class="details-body">
+          <div class="two-col details-col-gap">
+            <div class="col-stack">
+              <h3>独立微调 8 处屏幕元素颜色</h3>
+              <p class="hint">色盘会自动配好全套颜色；如果你想单独把某个文字、边框或背景改得更合心意，可以在这里逐个微调。</p>
+              <div id="theme-channels-grid" class="channels-grid"></div>
+
+              <hr class="divider">
+              <h3>单独保存改色后的屏幕固件文件（可选）</h3>
+              <div class="config-grid">
+                <label class="field">
+                  <span>导出哪种固件</span>
+                  <select id="patch-ips-target">
+                    <option value="auto">随当前所选方案自动判断</option>
+                    <option value="ipsBase">基础屏幕版固件</option>
+                    <option value="ipsLyrics">歌词扩展版固件</option>
+                  </select>
+                </label>
+              </div>
+              <div class="btn-row">
+                <button id="btn-download-patched-ips" class="btn" type="button">下载已注入新配色的屏幕固件 (.bin + manifest.json)</button>
+              </div>
+              <div id="patch-ips-feedback" class="mono-note"></div>
+            </div>
+
+            <div class="col-stack">
+              <h3>自画按键大图标点阵 (最大 16×11)</h3>
+              <div class="banner banner-warn">说明：按键点阵字形直接编译在固件程序里，网页修改后需导出 <code>keys.json</code> 并用源码 <code>tools/build.py</code> 重编才会进实机；日常改颜色与换桌宠无需重编源码。</div>
+              <div class="config-grid">
+                <label class="field">
+                  <span>选择要编辑的键帽</span>
+                  <select id="key-editor-select"></select>
+                </label>
+                <div class="btn-row align-end">
+                  <button id="btn-key-clear" class="btn" type="button">清空当前图案</button>
+                  <button id="btn-key-reset-all" class="btn" type="button">恢复默认图案</button>
+                  <button id="btn-key-export" class="btn" type="button">导出 keys.json</button>
+                  <label class="file-btn btn">导入 keys.json <input id="key-import-input" type="file" accept=".json"></label>
+                </div>
+              </div>
+              <div id="key-pixel-grid" class="pixel-grid" role="grid" aria-label="按键点阵编辑网格"></div>
+              <div id="key-grid-dims" class="mono-note"></div>
+
+              <hr class="divider">
+              <h3>完整定制方案打包保存 / 分享给朋友</h3>
+              <p class="hint">可以把你挑好的模式、色盘配色、桌宠 GIF、按键图案和音量设置打包成一个 <code>.json</code> 文件，以后一键还原。</p>
+              <label class="field">
+                <span>方案名字</span>
+                <input id="design-profile-name" type="text" value="我的 Rainy75 定制方案">
+              </label>
+              <div class="btn-row">
+                <button id="btn-export-design" class="btn btn-primary" type="button">导出整套方案 (.json)</button>
+                <label class="file-btn btn">导入方案 (.json) <input id="design-import-input" type="file" accept=".json"></label>
+              </div>
+              <div id="design-profile-feedback" class="mono-note"></div>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ==================== TAB 4: DEPLOY & RESTORE ==================== -->
+    <section id="panel-deploy" class="tab-panel hidden" data-tab="deploy" role="tabpanel">
+      <div class="section-head">
+        <div>
+
+          <h1>安装到键盘</h1>
+          <p class="lead">用 USB 连接键盘本体，并切到有线模式。</p>
+        </div>
+      </div>
+
+      <ol class="install-path" aria-label="安装进度">
+        <li data-install-phase="connect" aria-current="step">连接检查</li>
+        <li data-install-phase="review">核对清单</li>
+        <li data-install-phase="write">授权写入</li>
+        <li data-install-phase="done">完成使用</li>
+      </ol>
+      <div id="connection-occupancy" class="banner banner-warn hidden" role="status">
+        <strong>歌词后台正在运行</strong>
+        <div>先暂停后台以释放 USB，再点击「连接并检查键盘」。WOBHub 和其他驱动也需退出。</div>
+        <button id="btn-deploy-bg-stop" class="btn" type="button">暂停歌词后台</button>
+      </div>
+      <!-- Scenario selector -->
+      <article class="card deploy-config-card">
+        <div class="config-row">
+          <div class="field-block">
+            <span class="field-label">本次操作</span>
+            <div class="pill-group" role="group" aria-label="操作场景">
+              <button id="scenario-first" class="pill-btn active" type="button" data-scenario="first">首次安装</button>
+              <button id="scenario-update" class="pill-btn" type="button" data-scenario="update">更新或更换设计</button>
+              <button id="scenario-restore" class="pill-btn" type="button" data-scenario="restore">恢复官方固件</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="restore-honest-banner" class="banner banner-warn hidden">
+          <strong>关于「恢复官方原版」的诚实说明：</strong>
+          这里写入的是依据官方公开出厂版本重新构建的恢复镜像，<strong>并不是从你这把键盘原本 Flash 里备份读回来的文件</strong>；请按平时出厂版本选择 0.64 或 0.63-beta1 基线。
+        </div>
+
+        <div class="config-grid">
+                <label id="baseline-field" class="field hidden">
+                  <span>主控原厂版本</span>
+                  <select id="deploy-baseline">
+                    <option value="0x40">官方 0.64</option>
+                    <option value="0x3f">0.63-beta1</option>
+                  </select>
+                  <span id="baseline-detected-note" class="hint">连接后尝试自动识别。无法识别时，按 WOBHub 显示的版本选择。</span>
+                </label>
+          <label id="restore-target-wrap" class="field hidden">
+            <span>想恢复哪一部分？</span>
+            <select id="deploy-restore-target">
+              <option value="both">键盘主控 + 屏幕都恢复成官方原版</option>
+              <option value="main">只恢复键盘主控</option>
+              <option value="ips">只恢复小屏幕固件</option>
+            </select>
+          </label>
+        </div>
+      </article>
+
+      <div class="two-col deploy-columns">
+        <!-- Left column: Friendly Probe Status + Quick Actions + Advanced Accordion -->
+        <div class="col-stack">
+          <article class="card">
+            <div class="card-header">
+              <h3>连接键盘</h3>
+              <span id="probe-badge" class="pill pill-muted">等待连接</span>
+            </div>
+            <p class="hint"></p>
+            <div class="btn-row">
+              <button id="btn-probe-device" class="btn btn-primary btn-lg" type="button">连接并检查键盘</button>
+              <button id="btn-disconnect-device" class="btn" type="button" disabled>断开连接</button>
+            </div>
+
+            <div id="probe-feedback" role="alert" aria-live="polite"></div>
+            <div class="kv-list friendly-status-grid">
+              <div><dt>当前连接</dt><dd id="friendly-conn-text">还没连上键盘</dd></div>
+              <div><dt>屏幕硬件检查</dt><dd id="friendly-chip-text">连线后自动识别</dd></div>
+              <div><dt>已装功能</dt><dd id="friendly-func-text">--</dd></div>
+              <div><dt>时钟与字库</dt><dd id="friendly-clockfont-text">--</dd></div>
+            </div>
+
+            <details id="hardware-raw-details" class="mini-details">
+              <summary>硬件参数与高级选项</summary>
+              <div class="details-body">
+                <dl id="probe-telemetry" class="kv-list telemetry-grid">
+                  <div><dt>设备 PID / 模式</dt><dd id="probe-pid">--</dd></div>
+                  <div><dt>主控 MCU 状态</dt><dd id="probe-main">--</dd></div>
+                  <div><dt>屏幕 IPS 状态</dt><dd id="probe-ips">--</dd></div>
+                  <div><dt>Flash / 芯片系列</dt><dd id="probe-silicon">--</dd></div>
+                  <div><dt>主控时钟有效性</dt><dd id="probe-clock">--</dd></div>
+                  <div><dt>原厂 S1 状态 queryIps(7)</dt><dd id="probe-ui-active">--</dd></div>
+                  <div><dt>屏内 FONT.BIN CRC</dt><dd id="probe-font-crc">--</dd></div>
+                  <div><dt>歌词能力 (LY1)</dt><dd id="probe-lyrics-caps">--</dd></div>
+                </dl>
+
+
+
+                <div class="check-grid" id="deploy-options-grid">
+                  <label class="check"><input id="opt-force-main" type="checkbox"> 强制重刷主控 (V7.1)</label>
+                  <label class="check"><input id="opt-force-ips" type="checkbox"> 强制重刷屏幕 IPS</label>
+                  <label class="check"><input id="opt-force-font" type="checkbox"> 强制重传 FONT.BIN</label>
+                  <label class="check"><input id="opt-skip-gif" type="checkbox"> 跳过上传 S1 GIF</label>
+                  <label class="check"><input id="opt-skip-calibrate" type="checkbox"> 若时间有效则跳过对时</label>
+                </div>
+              </div>
+            </details>
+          </article>
+
+          <details id="maintenance-tools" class="card">
+            <summary>日常维护：校时、换动画与字库清理</summary>
+            <div class="details-body">
+
+            <div class="quick-tool-block">
+              <div class="config-grid">
+                <label class="field">
+                  <span>您所在的时区</span>
+                  <input id="quick-timezone" type="text" value="Asia/Shanghai">
+                </label>
+                <div class="align-end">
+                  <button id="btn-quick-calibrate" class="btn btn-primary" type="button" disabled> 一键校准键盘时间</button>
+                </div>
+              </div>
+              <p class="hint">键盘彻底断电后时间可能会停，连上线点一下这里就会把时间重新对准电脑时间。</p>
+            </div>
+
+            <hr class="divider">
+
+            <div class="quick-tool-block">
+              <button id="btn-quick-check-font" class="btn" type="button" disabled>恢复显示并检查字库</button>
+              <label class="check"><input id="quick-confirm-gif" type="checkbox"> 我确认要把桌宠工作室选好的新动图写进键盘</label>
+              <button id="btn-quick-upload-gif" class="btn" type="button" disabled>只更换桌宠动画</button>
+            </div>
+
+            <details class="mini-details">
+              <summary>释放空间：单独清理机内中文字库 (FONT.BIN)</summary>
+              <div class="quick-tool-block details-top-gap">
+                <label class="check"><input id="quick-confirm-del-font" type="checkbox"> 确认清理屏内字体文件（会保留桌宠动画，但删后歌词将不显示中文）</label>
+                <button id="btn-quick-delete-font" class="btn btn-warn" type="button" disabled>清理字体文件</button>
+              </div>
+            </details>
+          </div></details>
+
+          <details id="manual-bundle-details" class="card">
+            <summary>开发者：加载构建文件</summary>
+            <div class="details-body">
+              <p class="hint">使用发布包自带全部固件时无需手选；仅当直接打开仓库源码调试或测试自编译文件时使用。</p>
+              <div class="manual-slot">
+                <strong>主控固件 (main)</strong>
+                <div class="file-pair">
+                  <label class="file-pick">BIN <input id="manual-main-bin" type="file" accept=".bin"></label>
+                  <label class="file-pick">manifest.json <input id="manual-main-manifest" type="file" accept=".json"></label>
+                </div>
+                <span id="manual-main-status" class="mono-note">未选择（使用发布包内置文件）</span>
+              </div>
+              <div class="manual-slot">
+                <strong>基础版 IPS (ipsBase)</strong>
+                <div class="file-pair">
+                  <label class="file-pick">BIN <input id="manual-ips-base-bin" type="file" accept=".bin"></label>
+                  <label class="file-pick">manifest.json <input id="manual-ips-base-manifest" type="file" accept=".json"></label>
+                </div>
+                <span id="manual-ips-base-status" class="mono-note">未选择</span>
+              </div>
+              <div class="manual-slot">
+                <strong>歌词版 IPS (ipsLyrics)</strong>
+                <div class="file-pair">
+                  <label class="file-pick">BIN <input id="manual-ips-lyrics-bin" type="file" accept=".bin"></label>
+                  <label class="file-pick">manifest.json <input id="manual-ips-lyrics-manifest" type="file" accept=".json"></label>
+                </div>
+                <span id="manual-ips-lyrics-status" class="mono-note">未选择</span>
+              </div>
+              <div class="manual-slot">
+                <strong>恢复镜像 (主控 / IPS 可选)</strong>
+                <div class="file-pair">
+                  <label class="file-pick">主控恢复 BIN <input id="manual-restore-main-bin" type="file" accept=".bin"></label>
+                  <label class="file-pick">主控恢复 manifest <input id="manual-restore-main-manifest" type="file" accept=".json"></label>
+                </div>
+                <div class="file-pair">
+                  <label class="file-pick">IPS 恢复 BIN <input id="manual-restore-ips-bin" type="file" accept=".bin"></label>
+                  <label class="file-pick">IPS 恢复 manifest <input id="manual-restore-ips-manifest" type="file" accept=".json"></label>
+                </div>
+                <span id="manual-restore-status" class="mono-note">未选择</span>
+              </div>
+              <div class="manual-slot">
+                <strong>歌词点阵字库 FONT.BIN</strong>
+                <div class="file-pair">
+                  <label class="file-pick">新 FONT.BIN <input id="manual-font-bin" type="file" accept=".bin"></label>
+                  <label class="file-pick">旧 FONT.BIN <input id="manual-prev-font-bin" type="file" accept=".bin"></label>
+                </div>
+                <span id="manual-font-status" class="mono-note">未选择</span>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Right column: Clear Plan + Single-Flight Runner -->
+        <div class="col-stack">
+          <article class="card deploy-run-card">
+            <div class="card-header">
+              <h3>安装进度</h3>
+              <span id="runner-state-pill" class="pill pill-muted">准备就绪</span>
+            </div>
+
+            <div id="deploy-notices" class="notices-stack"></div>
+            <p id="install-summary" class="install-summary">连接后会自动列出需要安装的内容。</p>
+            <div class="runner-cta-row">
+              <button id="btn-start-deploy" class="btn btn-primary btn-lg" type="button" disabled>开始安装</button>
+              <button id="btn-abort-deploy" class="btn" type="button" disabled>结束本次安装</button>
+            </div>
+
+            <div class="progress-wrap">
+              <div class="progress-track">
+                <div id="deploy-progress-fill" class="progress-fill" style="width: 0%"></div>
+              </div>
+              <div class="progress-meta">
+                <span id="deploy-progress-text">连上键盘后即可开始</span>
+                <span id="deploy-progress-pct" class="mono">0%</span>
+              </div>
+            </div>
+
+            <div id="iap-auth-box" class="banner banner-highlight hidden">
+              <div class="banner-content">
+                <strong id="iap-auth-title">键盘已进入升级模式，需要一次新的设备授权</strong>
+                <p id="iap-auth-desc">键盘重启进升级通道时电脑会把它看成新设备。点一下「继续连接升级设备」，在浏览器弹窗选中「Rainy75」连接后就会自动接着刷完！</p>
+              </div>
+              <button id="btn-auth-iap" class="btn btn-primary btn-lg" type="button">继续连接升级设备</button>
+            </div>
+
+            <div id="deploy-error-box" class="banner banner-error hidden">
+              <strong id="deploy-error-title">写入被暂停或遇到问题</strong>
+              <p id="deploy-error-msg"></p>
+              <p id="deploy-recovery-hint" class="recovery-hint"></p>
+              <div class="btn-row">
+                <button id="btn-recheck-font" class="btn btn-primary hidden" type="button">恢复显示并检查字库</button>
+                <button id="btn-retry-step" class="btn btn-primary" type="button">再试一次这一步</button>
+                <button id="btn-switch-restore" class="btn btn-warn" type="button">切换到恢复官方原版</button>
+                <button id="btn-abort-disconnect" class="btn" type="button">停止并断开</button>
+              </div>
+            </div>
+
+            <div id="deploy-complete-box" class="banner hidden" role="status">
+              <h3>安装已完成</h3>
+              <p id="deploy-complete-copy">请检查小屏幕显示和按键响应。</p>
+              <div class="btn-row">
+                <button id="btn-complete-background" class="btn btn-primary" type="button">启动歌词后台</button>
+                <button id="btn-complete-overview" class="btn" type="button">返回屏幕模式</button>
+              </div>
+            </div>
+          <details id="plan-details" class="mini-details">
+            <summary>查看完整安装清单</summary>
+            <div class="details-body">
+            <div class="card-header">
+              <h3>本次安装清单</h3>
+              <span id="plan-status-pill" class="pill pill-muted">等待连接检查</span>
+            </div>
+
+            <ol id="deploy-plan-steps" class="step-list">
+              <li class="step-empty">请先点击左边「连接并检查我的键盘」，系统会为您列出要执行的步骤和跳过项。</li>
+            </ol>
+          </div></details>
+
+
+            <details class="mini-details">
+              <summary>查看详细过程记录</summary>
+              <div class="log-box details-top-gap">
+                <div class="log-head"><span>实时进度日志</span><button id="btn-clear-log" class="btn-link" type="button">清空</button></div>
+                <pre id="deploy-log" class="mono-log"></pre>
+              </div>
+            </details>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: WINDOWS BACKGROUND ==================== -->
+    <section id="panel-background" class="tab-panel hidden" data-tab="background" role="tabpanel">
+      <div class="hero-strip card">
+        <div class="hero-copy">
+
+          <h1>歌词后台</h1>
+          <p class="lead">歌词同步需要 USB 连接。工作台可以关闭。</p>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <article class="card">
+          <div class="card-header">
+            <h3>运行</h3>
+            <span id="bg-status-badge" class="pill pill-muted">检查中…</span>
+          </div>
+          <p class="hint">刷固件或对时的时候请先点「暂停关闭小助手」，因为同一条 USB 数据线同时只能让一个软件访问键盘。</p>
+          <details class="mini-details"><summary>连接与运行状态</summary><div class="details-body"><dl class="kv-list friendly-kv">
+            <div><dt>运行状态</dt><dd id="bg-running">--</dd></div>
+            <div><dt>数据线占用状态</dt><dd id="bg-hid">--</dd></div>
+            <div><dt>开机自动打开</dt><dd id="bg-startup">--</dd></div>
+            <div><dt>小助手控制台</dt><dd id="bg-url">--</dd></div>
+            <div><dt>当前屏幕样式</dt><dd id="bg-mode-layout">--</dd></div>
+            <div><dt>后台进程编号</dt><dd id="bg-pid">--</dd></div>
+          </dl></div></details>
+          <div class="btn-row">
+            <button id="btn-bg-start" class="btn btn-primary" type="button">启动</button>
+            <button id="btn-bg-open-console" class="btn" type="button" disabled>打开控制台</button>
+            <button id="btn-bg-stop" class="btn btn-warn" type="button">停止</button>
+            <button id="btn-bg-refresh" class="btn" type="button">刷新</button>
+          </div>
+          <label class="check"><input id="bg-startup-toggle" type="checkbox">登录时自动启动</label>
+          <div class="btn-row hidden">
+            <button id="btn-bg-startup-enable" class="btn" type="button"> 设为开机自动运行</button>
+            <button id="btn-bg-startup-disable" class="btn" type="button">取消开机自动运行</button>
+          </div>
+          <div class="preview-subpanel">
+            <h3>播放器样式</h3>
+            <p class="hint">将选好的布局、字号和音量提示保存到后台。后台运行中时，先停止再应用。</p>
+            <button id="btn-bg-apply-design" class="btn" type="button">应用样式并启动</button>
+          </div>
+          <div id="bg-action-feedback" class="mono-note" role="status"></div>
+        </article>
+
+        <details class="card"><summary>快捷入口与使用说明</summary><div class="col-stack details-body">
+          <article class="card">
+            <div class="card-header">
+              <h3>发布包快捷入口</h3>
+            </div>
+            <p class="hint">如果不打开这个网页，发布包里的 <code>Windows便携后台</code> 文件夹也配好了点一下就能用的快捷脚本：</p>
+            <ul class="guide-list">
+              <li><code>1-打开工作台（推荐点我）.cmd</code> ， 平时想换桌宠、改色盘或更新键盘时点它</li>
+              <li><code>Windows便携后台\启动歌词与音量后台.cmd</code> ， 只悄悄在后台同步歌词和音量</li>
+              <li><code>Windows便携后台\打开歌词控制台.cmd</code> ， 手动改歌词早晚偏移、挑样式或大小</li>
+              <li><code>Windows便携后台\开启开机自启.cmd</code> / <code>取消开机自启.cmd</code> ， 管开机自动打开</li>
+              <li><code>Windows便携后台\退出后台.cmd</code> ， 准备用网页刷键盘前点一下退出</li>
+            </ul>
+          </article>
+
+          <article class="card">
+            <div class="card-header">
+              <h3>连接与使用范围</h3>
+              <span class="pill pill-warn">说明</span>
+            </div>
+            <ul class="guide-list">
+              <li><strong>仅支持 USB 有线模式同步歌词、封面和音量</strong>（插 2.4G 接收器或连蓝牙时电脑小助手无法写入屏幕）。</li>
+              <li><strong><code>Ctrl + F8</code> 是唯一内置快捷键</strong>，按一下就能在「键盘桌宠页」和「歌词页」之间来回切换，小助手不会监听你的任何打字按键。</li>
+              <li><strong>彻底断电后时间会停住</strong>：如果键盘拔掉线且彻底耗光电量/关掉电池开关，重新通电后打开本网页点一下「一键校准时间」就好。</li>
+            </ul>
+          </article>
+        </div></details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="studio-footer">
+    <span>Rainy75 V2 TFT</span>
+    <span>本地离线运行</span>
+  </footer>
+
+  <script type="module" src="./studio-app.mjs"></script>
+</body>
+</html>

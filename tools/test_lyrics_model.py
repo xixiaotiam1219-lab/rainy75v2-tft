@@ -73,7 +73,7 @@ def main():
  if manifest['format']=='rainy75v2-tft/build-v1':assert request(11,14)==(0xbe,1024) and request(11,15)==(0xbf,13)
  put(0x2003ede8,object_at);put(object_at+0x658,surface)
  for at,v in [(0x2003edba,320),(0x2003edbc,172),(0x2003edbe,0),(0x2003edc0,0)]:put(at,v,2)
- theme=load(ROOT/'profiles/themes.json')[manifest['theme']];base=preview_frame(theme,load(ROOT/'profiles/keys.json'))
+ theme=manifest.get('themeColors')or load(ROOT/'profiles/themes.json')[manifest['theme']];base=preview_frame(theme,load(ROOT/'profiles/keys.json'))
  rgb=bytearray()
  for color in base.getdata():rgb+=struct.pack('<H',rgb565('#%02x%02x%02x'%color))
  u.mem_write(surface,bytes(rgb));call('rainy_hook_native_status',84,0,1);u.mem_write(0x20000100,bytes([0xbe,0x1a,8,13,0x8c,34,56,0xed]));call('rainy_hook_ips',0x20000100,8);draw()

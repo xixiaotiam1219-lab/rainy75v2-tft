@@ -1,0 +1,32 @@
+Rainy75 V2 Restore Firmware Notice / 原厂恢复固件说明
+=======================================================
+
+1. NOT a Device Flash Readback / 非实机 Flash 回读镜像
+   The restore images in this folder (`main-064-restore.bin`,
+   `main-063beta1-restore.bin`, `ips-restore.bin`, and any other `*-restore.bin`)
+   are NOT dumps or readbacks extracted from a physical keyboard's flash chip.
+   本目录中的恢复镜像（`main-064-restore.bin`、`main-063beta1-restore.bin`、
+   `ips-restore.bin` 等 `*-restore.bin` 文件）均不是从实机键盘 Flash 芯片回读得到的备份。
+
+2. Built from Matched Factory Inputs / 基于匹配的官方原厂输入构建
+   They are reconstructed and padded to target flash layout using matched
+   upstream factory/stock firmware binaries corresponding to each declared
+   version (`0.64`, `0.63-beta1`, stock IPS package) and verified against
+   the repository build manifest (`manifest.json` SHA-256).
+   这些镜像是使用与声明版本对应的官方原厂固件输入（如 `0.64`、`0.63-beta1` 主控及
+   原厂副屏固件）按目标 Flash 布局重建并校验 SHA-256 后生成的恢复包。
+
+3. Always Match Your Keyboard Hardware & Main Version / 请务必核对硬件与主控版本
+   - Check your keyboard's stock main controller version (`0.64` vs `0.63-beta1`)
+     before flashing `main-064-restore.bin` or `main-063beta1-restore.bin`.
+   - Do NOT flash a mismatched main firmware version or interrupt USB power while
+     flashing.
+   - 刷写恢复镜像前请务必核对当前主控版本（`0.64` 或 `0.63-beta1`），切勿混刷；
+     刷写过程中请保持有线 USB 直连稳定供电，切勿中途拔线或断电。
+
+4. No Warranty / 免责声明
+   This software and firmware bundle is provided "AS IS" without warranty of
+   any kind. See `../LICENSE-NOTICE.txt` and `../licenses/` for complete
+   licensing and third-party notices.
+   本工具与固件包按“现状（AS IS）”提供，不附带任何明示或暗示担保。完整许可与
+   第三方声明请参阅发布包根目录的 `LICENSE-NOTICE.txt` 与 `licenses/` 目录。

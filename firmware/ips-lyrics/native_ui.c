@@ -3,6 +3,8 @@
 #include "lyrics.h"
 #include "cache_font.h"
 #include "ui_assets.h"
+const RainyThemeSlot r75_theme __attribute__((section(".rodata.r75_theme"),used))=R75_THEME_INIT;
+static inline const RainyThemeSlot *theme_slot(void){const RainyThemeSlot *p=&r75_theme;__asm__("":"+r"(p));return p;}
 #define R(a) (*(volatile u32*)(a))
 #define LCD_BUSY R(0x20001c6c)
 extern u8 __live_bss_start__,__live_bss_end__;
@@ -105,13 +107,15 @@ void rainy_hook_cached_draw(u16 x,u16 y,u16 w,u16 h,const u8 *p){
   if(!ui.active){ui.active=1;ui.key_dirty=ui.status_dirty=1;ui.time=0xfffffffeu;}
   if(!x&&!y&&w==320&&h==172)lyrics_prepare((u8*)p,!redraw,clock_ms());
   refresh();
+  {const RainyThemeSlot *t=theme_slot();u16 fg=t->ink,bg;
   for(i=0;i<5;i++){
-   r=&ui_geo[i];x0=x>r->x?x:r->x;y0=y>r->y?y:r->y;x1=x+w<r->x+r->w?x+w:r->x+r->w;y1=y+h<r->y+r->h?y+h:r->y+r->h;
+   r=&ui_geo[i];bg=r->role?t->bg:t->panel;
+   x0=x>r->x?x:r->x;y0=y>r->y?y:r->y;x1=x+w<r->x+r->w?x+w:r->x+r->w;y1=y+h<r->y+r->h?y+h:r->y+r->h;
    for(py=y0;py<y1;py++)for(px=x0;px<x1;px++){
-    bit=(py-r->y)*r->w+px-r->x;color=ui.masks[r->offset+(bit>>3)]&(128u>>(bit&7))?r->fg:r->bg;
+    bit=(py-r->y)*r->w+px-r->x;color=ui.masks[r->offset+(bit>>3)]&(128u>>(bit&7))?fg:bg;
     at=((py-y)*w+px-x)*2;((u8*)p)[at]=(u8)color;((u8*)p)[at+1]=(u8)(color>>8);
    }
-  }
+  }}
   if(!x&&!y&&w==320&&h==172)lyrics_draw((u8*)p,clock_ms());
   ui.pointer=address;ui.object=current_object();ui.x=x;ui.y=y;ui.w=w;ui.h=h;
   ui.has_surface=R(ui.object+0x658)==address;ui.dirty=0;

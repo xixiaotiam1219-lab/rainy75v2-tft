@@ -57,6 +57,19 @@ test('font replacement validates the old pack and waits for a suspended fixed-fi
  await assert.rejects(()=>c.uploadFont(font,{replaceConfirmed:true,replaceExisting:true}),/旧 FONT/);
  const corrupt=Buffer.from(previous);corrupt[256]^=1;await assert.rejects(()=>c.uploadFont(font,{replaceConfirmed:true,replaceExisting:true,previousFont:corrupt}),/CRC/);
 });
+
+test('lost pause ACK resumes rendering without starting a transfer or masking the original error',async()=>{
+ const {AppClient}=await import('../web/hid.mjs'),font=fontFixture(),crc=validateFont(font).crc;
+ for(const cleanupFails of [false,true]){
+  const c=new AppClient({}),controls=[],original=Error('OP2 / ID42188: timeout C1/0');
+  c.request=async(op,id)=>({value:op===24?0x4c59:id===5?crc&65535:crc>>>16});
+  c.control=async op=>{controls.push(op);if(op===2)throw original;if(cleanupFails)throw Error('resume timeout');};
+  c.stock=async()=>assert.fail('No BEGIN, DATA or ABORT allowed before pause succeeds');
+  await assert.rejects(()=>c.uploadFont(font,{replaceConfirmed:true}),e=>e===original);
+  assert.deepEqual(controls,[2,5]);
+  assert.equal(original.cleanupError,cleanupFails?'resume timeout':undefined);
+ }
+});
 test('standalone font deletion is confirmed, guarded, resumes on failure, and never uploads an asset',async()=>{
  const {AppClient}=await import('../web/hid.mjs'),font=fontFixture(),crc=validateFont(font).crc;
  for(const outcome of ['success','wrong-old','missing-cap','timeout']){

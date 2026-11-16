@@ -49,6 +49,32 @@ export class AppClient{
  }
  async queryMain(f){return (await this.request(15,f,[],a=>a.status===0xd0+f)).value;}
  async queryIps(f){return (await this.request(11,f,[],a=>a.status===0xb0+f)).value;}
+ async inspectFont({attempts=40}={}){
+  await this.request(24,1,[],a=>a.status===0xa6&&a.value===0x4c59);
+  const q=async f=>(await this.request(22,f,[],a=>a.status===0xc0+(f&15))).value;
+  const low=await q(5),high=await q(6),expectedBodyCrc=(high*65536+low)>>>0;
+  let readyState=0,error=0;
+  for(let i=0;i<attempts;i++){
+   readyState=await q(0);error=await q(2);
+   if(readyState===1||readyState===0&&error!==0)return{ready:readyState===1,settled:true,readyState,error,expectedBodyCrc};
+   await this.pause(75);
+  }
+  return{ready:false,settled:false,readyState,error,expectedBodyCrc};
+ }
+ async listFiles(){
+  const word=async(sub,offset=0)=>{
+   await this.io.send(frame(sub,offset));await this.pause(40);
+   const start=this.now();
+   while(this.now()-start<4000){const a=await this.ack();if(a.sub===sub&&a.status!==255){if(a.status!==0)throw Object.assign(Error('素材列表读取失败，状态 '+a.status),{status:a.status});return a.value;}await this.pause(20);}
+   throw Error('素材列表读取超时，请退出其他驱动和后台后重新连接');
+  };
+  const header=await word(10),length=header&255,count=header>>>8,bytes=[];
+  for(let at=0;at<length;at+=2){const v=await word(11,at);bytes.push(v&255);if(at+1<length)bytes.push(v>>>8);}
+  const text=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(bytes)).trim();
+  const rows=text?text.split(/\r?\n/).map(row=>{const m=/^([A-Za-z0-9_.-]+)\s+(\d+)$/.exec(row);if(!m)throw Error('素材列表格式不完整，未写入文件');return{name:m[1],bytes:Number(m[2])};}):[];
+  if(rows.length!==count||new Set(rows.map(row=>row.name.toUpperCase())).size!==count)throw Error('素材列表不完整，未写入文件');
+  return rows;
+ }
  async probeLyricsTarget(){
   if(await this.queryMain(9)!==MAIN_CAP||await this.queryIps(0)!==IPS_CAP)throw Error('请先安装匹配的主控 V7.1 与本版普通 IPS');
   const flashKiB=await this.queryIps(14),series=await this.queryIps(15);
@@ -75,18 +101,19 @@ export class AppClient{
  async stock(sub,a=0,b=0,c=0,payload=[]){
   return this.sendAwait(frame(sub,a,b,c,payload),ack=>{
    if(ack.sub!==sub||ack.status===255)return false;if(sub===2&&ack.value!==(a|b<<8))return false;
-   if(ack.status!==0&&!(sub===1&&ack.status===6))throw Error('素材指令返回状态 '+ack.status);return true;
+   if(ack.status!==0&&!(sub===1&&ack.status===6))throw Object.assign(Error(ack.status===4?'素材存储空间不足（状态 4）':'素材指令返回状态 '+ack.status),{status:ack.status,assetCommand:sub});return true;
   });
  }
  async upload(bytes,{replaceConfirmed=false,progress=()=>{}}={}){
   if(!replaceConfirmed)throw Error('请先确认覆盖素材槽位 S1');validateGif(bytes);if(await this.queryIps(0)!==IPS_CAP)throw Error('屏幕协议不匹配');
   const crc=crc16(bytes),begin=new Uint8Array(17);begin.set(new TextEncoder().encode('S1      GIF'));new DataView(begin.buffer).setUint32(11,bytes.length,true);new DataView(begin.buffer).setUint16(15,crc,true);
-  await this.control(2);let ok=false;
+  let ok=false,started=false,failure;
   try{
+   await this.control(2);started=true;
    await this.stock(1,0,0,0,begin);
    for(let offset=0,seq=0;offset<bytes.length;offset+=232,seq++){await this.stock(2,seq&255,seq>>>8,0,bytes.subarray(offset,offset+232));progress(Math.min(1,(offset+232)/bytes.length));}
    await this.stock(3,0,0,0,[crc&255,crc>>>8]);ok=true;
-  }finally{if(!ok)try{await this.stock(4);}catch{}await this.control(5);}
+  }catch(e){failure=e;throw e;}finally{if(started&&!ok)try{await this.stock(4);}catch{}try{await this.control(5);}catch(e){if(!failure)throw e;failure.cleanupError=e.message;}}
  }
  async _removeFont(previous){
   const query=async field=>(await this.request(22,field,[],a=>a.status===0xc0+field)).value;
@@ -114,15 +141,15 @@ export class AppClient{
   const query=async field=>(await this.request(22,field,[],a=>a.status===0xc0+field)).value;
   if(previous)try{await query(9);}catch{throw Error('当前歌词固件缺少字库替换接口，请先更新固件');}
   const crc=crc16(bytes),begin=new Uint8Array(17);begin.set(new TextEncoder().encode('FONT    BIN'));new DataView(begin.buffer).setUint32(11,bytes.length,true);new DataView(begin.buffer).setUint16(15,crc,true);
-  let ok=false,suspended=false,started=false;
+  let ok=false,started=false,failure;
   try{
-   await this.control(2);suspended=true;
+   await this.control(2);
    if(previous)await this._removeFont(previous);
    started=true;
    await this.stock(1,0,0,0,begin);
    for(let offset=0,seq=0;offset<bytes.length;offset+=232,seq++){await this.stock(2,seq&255,seq>>>8,0,bytes.subarray(offset,offset+232));progress(Math.min(1,(offset+232)/bytes.length));}
    await this.stock(3,0,0,0,[crc&255,crc>>>8]);ok=true;
-  }finally{if(started&&!ok)try{await this.stock(4);}catch{}if(suspended)await this.control(5);}
+  }catch(e){failure=e;throw e;}finally{if(started&&!ok)try{await this.stock(4);}catch{}try{await this.control(5);}catch(e){if(!failure)throw e;failure.cleanupError=e.message;}}
  }
  async enterIap(target){const t=TARGETS[target];if(!t)throw Error('Unknown target');await this.io.send(new Uint8Array(t.boot));await this.close();}
 }

@@ -26,6 +26,21 @@ test('asset commands wait past 255 and ignore an old DATA sequence',async()=>{
  assert.equal((await client.stock(2,7,0,0,[1])).value,7);assert.equal(reads,3);
 });
 
+test('file listing parses validated fixed file names and refuses incomplete or duplicate rows',async()=>{
+ for(const [text,count,valid] of [['S1.GIF 100\nFONT.BIN 2345\n',2,true],['FONT.BIN 2345\n',2,false],['FONT.BIN 1\nfont.bin 2\n',2,false]]){
+  let now=0,packet;const data=new TextEncoder().encode(text);
+  const c=new AppClient({send:async p=>{packet=p;}},{now:()=>now,pause:async ms=>{now+=ms;}});
+  c.ack=async()=>{const sub=packet[3],at=packet[4];assert(now>=40);return{sub,status:0,value:sub===10?(count<<8)|data.length:data[at]|(data[at+1]||0)<<8};};
+  if(valid)assert.deepEqual(await c.listFiles(),[{name:'S1.GIF',bytes:100},{name:'FONT.BIN',bytes:2345}]);
+  else await assert.rejects(()=>c.listFiles(),/列表不完整/);
+ }
+});
+
+test('storage-full replies preserve their status instead of becoming a generic timeout',async()=>{
+ const c=new AppClient({send:async()=>{}});c.ack=async()=>({sub:1,status:4,value:0});
+ await assert.rejects(()=>c.stock(1),e=>e.status===4&&e.assetCommand===1&&/存储空间不足/.test(e.message));
+});
+
 test('cancelling a silent HID read releases listeners but waits for its USB write before another exchange',async()=>{
  const listeners=new Set;let finishWrite;const signal=new AbortController;
  const d={sendReport:()=>new Promise(resolve=>{finishWrite=resolve;}),addEventListener:(_,f)=>listeners.add(f),removeEventListener:(_,f)=>listeners.delete(f)};

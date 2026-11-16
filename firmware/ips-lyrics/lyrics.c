@@ -11,6 +11,7 @@
 #define LAYOUTS 5u
 #define COVER_PIXELS 4096u
 #include "lyrics_theme.h"
+static inline const RainyThemeSlot *theme_slot(void){const RainyThemeSlot *p=&r75_theme;__asm__("":"+r"(p));return p;}
 typedef struct {u8 count,advance[MAX_TEXT];u16 ids[MAX_TEXT],width;u8 *bits;} Line;
 typedef struct {
  u8 file[FIL_BYTES];
@@ -218,14 +219,14 @@ void lyrics_maintenance(int suspended){
 }
 static void pixel(u8 *p,unsigned x,unsigned y,unsigned color){unsigned at=(y*320u+x)*2u;if(x>=320||y>=172)return;p[at]=(u8)color;p[at+1]=(u8)(color>>8);}
 static void blend_pixel(u8 *p,unsigned x,unsigned y,unsigned color,unsigned alpha){unsigned old,r,g,b;if(!alpha||x>=320||y>=172)return;if(alpha>=256){pixel(p,x,y,color);return;}old=le16(p+(y*320u+x)*2u);r=((old>>11)*(256u-alpha)+(color>>11)*alpha)>>8;g=(((old>>5&63u)*(256u-alpha))+((color>>5&63u)*alpha))>>8;b=(((old&31u)*(256u-alpha))+((color&31u)*alpha))>>8;pixel(p,x,y,(r<<11)|(g<<5)|b);}
-void lyrics_prepare(u8 *pixels,int fresh,u32 now){unsigned at=(39u*320u+22u)*2u,raw;(void)fresh;(void)now;if(!l)return;
+void lyrics_prepare(u8 *pixels,int fresh,u32 now){unsigned at=(39u*320u+22u)*2u,raw;u16 bg=theme_slot()->bg;(void)fresh;(void)now;if(!l)return;
  /* The supported cache GIF restores this border pixel on EVERY full frame.
   * The player compositor clears it. The original decoder can finish BEFORE
   * a GUI-owned repaint, so a caller label alone cannot identify fresh RGB.
   * This is verified against every frame of the installed cache asset. */
  raw=(unsigned)(pixels[at]|pixels[at+1]<<8);
- if(!l->marker_known&&raw!=BG){l->source_marker=(u16)raw;l->marker_known=1;}
- raw=raw!=(l->mode&&l->layout==4?l->drawn_marker:BG);
+ if(!l->marker_known&&raw!=bg){l->source_marker=(u16)raw;l->marker_known=1;}
+ raw=raw!=(l->mode&&l->layout==4?l->drawn_marker:bg);
  if(l->wanted||raw)l->mode=l->wanted;
 }
 static int mono(const Line *p,unsigned x,unsigned y){unsigned bit=y*p->width+x;return p->bits&&(p->bits[bit>>3]&(128u>>(bit&7)));}
@@ -237,21 +238,21 @@ static void draw_from(u8 *pixels,const Line *p,int y,unsigned field,u32 motion,u
 }
 static void draw_line(u8 *pixels,const Line *p,int y,unsigned field,u32 motion,unsigned color,int clip0,int clip1,unsigned scale){draw_from(pixels,p,y,field,motion,color,clip0,clip1,scale,scale==2?16u:17u);}
 static void ascii_color(u8 *p,const u8 *s,unsigned n,unsigned x,unsigned y,unsigned color){unsigned i,xx,yy;for(i=0;i<n;i++)for(yy=0;yy<7;yy++)for(xx=0;xx<5;xx++)if(cache_font[glyph_index(s[i])][yy]&(16u>>xx))pixel(p,x+i*6+xx,y+yy,color);}
-static void ascii(u8 *p,const u8 *s,unsigned n,unsigned x,unsigned y){ascii_color(p,s,n,x,y,INK);}
+static void ascii(u8 *p,const u8 *s,unsigned n,unsigned x,unsigned y){ascii_color(p,s,n,x,y,theme_slot()->ink);}
 static void overlay_ascii(u8 *p,const u8 *s,unsigned n,unsigned x,unsigned y,unsigned scale,unsigned color,unsigned alpha){unsigned i,xx,yy,dx,dy;for(i=0;i<n;i++)for(yy=0;yy<7;yy++)for(xx=0;xx<5;xx++)if(cache_font[glyph_index(s[i])][yy]&(16u>>xx))for(dy=0;dy<scale;dy++)for(dx=0;dx<scale;dx++)blend_pixel(p,x+(i*6u+xx)*scale+dx,y+yy*scale+dy,color,alpha);}
 static void stamp(u8 *p,u32 ms,unsigned x,unsigned y){u32 s=ms/1000u,m=s/60u;u8 t[5];if(m>99)m=99;t[0]=(u8)('0'+m/10u);t[1]=(u8)('0'+m%10u);t[2]=':';t[3]=(u8)('0'+s/10u%6u);t[4]=(u8)('0'+s%10u);ascii(p,t,5,x,y);}
 static void card(u8 *p){
- static const u8 outer[7]={4,3,2,1,0,0,0},inner[5]={3,1,1,0,0};unsigned x,y,edge,inset;
- for(y=0;y<70;y++){edge=y<35?y:69-y;inset=edge<7?outer[edge]:0;for(x=inset;x<298-inset;x++)pixel(p,11+x,75+y,CARD);}
- for(y=0;y<66;y++){edge=y<33?y:65-y;inset=edge<5?inner[edge]:0;for(x=inset;x<294-inset;x++)pixel(p,13+x,77+y,PAPER);}
+ static const u8 outer[7]={4,3,2,1,0,0,0},inner[5]={3,1,1,0,0};const RainyThemeSlot *t=theme_slot();unsigned x,y,edge,inset,border=t->lyricsBorder,panel=t->lyricsPanel;
+ for(y=0;y<70;y++){edge=y<35?y:69-y;inset=edge<7?outer[edge]:0;for(x=inset;x<298-inset;x++)pixel(p,11+x,75+y,border);}
+ for(y=0;y<66;y++){edge=y<33?y:65-y;inset=edge<5?inner[edge]:0;for(x=inset;x<294-inset;x++)pixel(p,13+x,77+y,panel);}
 }
 static void slice(u8 *pixels,const Line *p,unsigned start,unsigned width,unsigned y){
- unsigned x,yy,left=16u+(288u-width*2u)/2u;
+ unsigned x,yy,left=16u+(288u-width*2u)/2u,ink=theme_slot()->ink;
  if(!p->bits)return;
- for(yy=0;yy<40;yy++)for(x=0;x<width*2u;x++)if(mono(p,start+x/2u,yy/2u))pixel(pixels,left+x,y+yy,INK);
+ for(yy=0;yy<40;yy++)for(x=0;x<width*2u;x++)if(mono(p,start+x/2u,yy/2u))pixel(pixels,left+x,y+yy,ink);
 }
 static void paged(u8 *pixels){
- const Line *p=&l->live[1];u16 starts[16],widths[16];unsigned i,rows=0,start=0,width=0,pages,page,row;u8 label[3];
+ const Line *p=&l->live[1];u16 starts[16],widths[16];unsigned i,rows=0,start=0,width=0,pages,page,row,ink=theme_slot()->ink;u8 label[3];
  /* At most 96 glyphs, each <=20px. A 144px row fits at least seven, so
   * fourteen rows suffice. Sixteen bounded slots leave a checked margin. */
  for(i=0;i<p->count;i++){
@@ -261,7 +262,7 @@ static void paged(u8 *pixels){
  if(width){if(rows>=16)return;starts[rows]=(u16)start;widths[rows++]=(u16)width;}
  pages=(rows+1u)/2u;if(!pages)pages=1;
  if(l->line_span){u32 motion=l->line_motion;if(motion>=l->line_span)motion=l->line_span-1u;page=motion*pages/l->line_span;}else page=(l->line_motion/6000u)%pages;
- draw_line(pixels,&l->live[0],43,pages>1?244u:286u,l->title_motion,INK,43,63,1);
+ draw_line(pixels,&l->live[0],43,pages>1?244u:286u,l->title_motion,ink,43,63,1);
  if(pages>1){label[0]=(u8)('1'+page);label[1]='/';label[2]=(u8)('0'+pages);ascii(pixels,label,3,278,49);}
  row=page*2u;if(row<rows){slice(pixels,p,starts[row],widths[row],row+1u<rows?74u:94u);if(row+1u<rows)slice(pixels,p,starts[row+1u],widths[row+1u],118);}
 }
@@ -312,35 +313,36 @@ static void immersive(u8 *p,u32 now){
  /* Source-frame marker is constant across the supported full-frame GIF.
   * Remember our own pixel and avoid a collision by only one RGB565 bit;
   * the immersive view needs no visible theme-colored sentinel pixel. */
- {unsigned at=(39u*320u+22u)*2u;u16 mark=le16(p+at);if(!l->marker_known)mark=BG;else if(mark==l->source_marker)mark^=1u;pixel(p,22,39,mark);l->drawn_marker=mark;}
+ {unsigned at=(39u*320u+22u)*2u;u16 mark=le16(p+at);if(!l->marker_known)mark=theme_slot()->bg;else if(mark==l->source_marker)mark^=1u;pixel(p,22,39,mark);l->drawn_marker=mark;}
  l->paint_last=(u16)(((u32(*)(void))0x0803a2bb)()-started);if(l->paint_last>l->paint_max)l->paint_max=l->paint_last;
 }
-static void draw_scene(u8 *p,u32 now){unsigned x,y,progress=0,offset=0;u32 pos,elapsed;if(!l||!l->mode)return;
+static void draw_scene(u8 *p,u32 now){const RainyThemeSlot *t;unsigned x,y,progress=0,offset=0,bg,track,ink,muted,accent;u32 pos,elapsed;if(!l||!l->mode)return;
  if(l->layout==4){immersive(p,now);return;}
- for(y=37;y<172;y++)for(x=0;x<320;x++)pixel(p,x,y,BG);
- for(x=16;x<304;x++)pixel(p,x,l->layout?37:40,TRACK);
+ t=theme_slot();bg=t->bg;track=t->shell;ink=t->ink;muted=t->muted;accent=t->accent;
+ for(y=37;y<172;y++)for(x=0;x<320;x++)pixel(p,x,y,bg);
+ for(x=16;x<304;x++)pixel(p,x,l->layout?37:40,track);
  if(l->layout==3)paged(p);
  else if(l->layout==2){
-  draw_line(p,&l->live[0],43,286,l->title_motion,INK,43,63,1);
-  if(l->transition){elapsed=now-l->changed;if(elapsed>280u)elapsed=280u;offset=elapsed*44u/280u;draw_line(p,&l->previous,79-(int)offset,288,0,INK,76,123,2);draw_line(p,&l->live[1],123-(int)offset,288,l->line_motion,INK,76,123,2);}else draw_line(p,&l->live[1],79,288,l->line_motion,INK,76,123,2);
-  draw_line(p,&l->live[2],127,286,l->line_motion,MUTED,127,147,1);
+  draw_line(p,&l->live[0],43,286,l->title_motion,ink,43,63,1);
+  if(l->transition){elapsed=now-l->changed;if(elapsed>280u)elapsed=280u;offset=elapsed*44u/280u;draw_line(p,&l->previous,79-(int)offset,288,0,ink,76,123,2);draw_line(p,&l->live[1],123-(int)offset,288,l->line_motion,ink,76,123,2);}else draw_line(p,&l->live[1],79,288,l->line_motion,ink,76,123,2);
+  draw_line(p,&l->live[2],127,286,l->line_motion,muted,127,147,1);
  }else if(l->layout==1){
-  draw_line(p,&l->live[0],43,286,l->title_motion,INK,43,63,1);card(p);
-  if(l->transition){elapsed=now-l->changed;if(elapsed>280u)elapsed=280u;offset=elapsed*64u/280u;draw_line(p,&l->previous,90-(int)offset,288,0,INK,78,143,2);draw_line(p,&l->live[1],154-(int)offset,288,l->line_motion,INK,78,143,2);}else draw_line(p,&l->live[1],90,288,l->line_motion,INK,78,143,2);
+  draw_line(p,&l->live[0],43,286,l->title_motion,ink,43,63,1);card(p);
+  if(l->transition){elapsed=now-l->changed;if(elapsed>280u)elapsed=280u;offset=elapsed*64u/280u;draw_line(p,&l->previous,90-(int)offset,288,0,ink,78,143,2);draw_line(p,&l->live[1],154-(int)offset,288,l->line_motion,ink,78,143,2);}else draw_line(p,&l->live[1],90,288,l->line_motion,ink,78,143,2);
  }else{
-  draw_line(p,&l->live[0],51,286,l->title_motion,INK,48,75,1);
-  if(l->transition){elapsed=now-l->changed;if(elapsed>280u)elapsed=280u;offset=elapsed*28u/280u;draw_line(p,&l->previous,86-(int)offset,286,0,INK,86,135,1);draw_line(p,&l->live[1],114-(int)offset,286,l->line_motion,INK,86,135,1);draw_line(p,&l->live[2],142-(int)offset,286,l->line_motion,MUTED,86,135,1);}else{draw_line(p,&l->live[1],86,286,l->line_motion,INK,86,135,1);draw_line(p,&l->live[2],114,286,l->line_motion,MUTED,86,135,1);}
+  draw_line(p,&l->live[0],51,286,l->title_motion,ink,48,75,1);
+  if(l->transition){elapsed=now-l->changed;if(elapsed>280u)elapsed=280u;offset=elapsed*28u/280u;draw_line(p,&l->previous,86-(int)offset,286,0,ink,86,135,1);draw_line(p,&l->live[1],114-(int)offset,286,l->line_motion,ink,86,135,1);draw_line(p,&l->live[2],142-(int)offset,286,l->line_motion,muted,86,135,1);}else{draw_line(p,&l->live[1],86,286,l->line_motion,ink,86,135,1);draw_line(p,&l->live[2],114,286,l->line_motion,muted,86,135,1);}
  }
  pos=l->position;if(l->playing)pos+=(u32)(now-l->received);if(pos>l->duration)pos=l->duration;
  if(l->duration){u32 a=pos/100u,b=l->duration/100u;if(b)progress=a*285u/b;}
- if(l->layout==3){for(y=167;y<169;y++)for(x=18;x<303;x++)pixel(p,x,y,x<18+progress?ACCENT:TRACK);return;}
+ if(l->layout==3){for(y=167;y<169;y++)for(x=18;x<303;x++)pixel(p,x,y,x<18+progress?accent:track);return;}
  offset=l->layout?11u:0u;
- for(y=143+offset;y<146+offset;y++)for(x=18;x<303;x++)pixel(p,x,y,x<18+progress?ACCENT:TRACK);
- for(y=142+offset;y<147+offset;y++)for(x=18+progress;x<21+progress&&x<305;x++)pixel(p,x,y,INK);
+ for(y=143+offset;y<146+offset;y++)for(x=18;x<303;x++)pixel(p,x,y,x<18+progress?accent:track);
+ for(y=142+offset;y<147+offset;y++)for(x=18+progress;x<21+progress&&x<305;x++)pixel(p,x,y,ink);
  stamp(p,pos,18,l->layout?162:155);stamp(p,l->duration,272,l->layout?162:155);
  offset=l->layout?8u:0u;
- for(y=0;y<9;y++)for(x=0;x<5;x++){if(l->playing?(x<2||x>=3):x<=((y<5?y:8-y)/2))pixel(p,155+x,153+offset+y,INK);}
- for(y=0;y<7;y++)for(x=0;x<5;x++){if(!x||x>=4u-(y<4?y:6u-y))pixel(p,133+x,154+offset+y,INK);if(x==4||x<=(y<4?y:6u-y))pixel(p,177+x,154+offset+y,INK);}
+ for(y=0;y<9;y++)for(x=0;x<5;x++){if(l->playing?(x<2||x>=3):x<=((y<5?y:8-y)/2))pixel(p,155+x,153+offset+y,ink);}
+ for(y=0;y<7;y++)for(x=0;x<5;x++){if(!x||x>=4u-(y<4?y:6u-y))pixel(p,133+x,154+offset+y,ink);if(x==4||x<=(y<4?y:6u-y))pixel(p,177+x,154+offset+y,ink);}
 }
 static void draw_volume(u8 *p,u32 now){
  static const u8 inset[10]={7,4,3,2,1,1,0,0,0,0};unsigned alpha,n=0,level,progress,x,y,k,dx,dy,shade,track,color,shift,edge,pad,left;u8 label[4];
@@ -351,7 +353,7 @@ static void draw_volume(u8 *p,u32 now){
   for(y=0;y<13;y++)for(x=0;x<16;x++)if(lyrics_volume_icon(x,y,l->volume_muted||!level))blend_pixel(p,18+x,151+y,0xffff,alpha);
   overlay_ascii(p,label,n,303u-n*6u,153,1,0xffff,alpha);return;
  }
- color=l->layout==4&&l->cover_active?l->palette[0]:INK;shade=((color>>11)/2u<<11)|((color>>5&63u)/2u<<5)|((color&31u)/2u);track=((shade>>11)+(31u-(shade>>11))/5u)<<11;track|=((shade>>5&63u)+(63u-(shade>>5&63u))/5u)<<5;track|=(shade&31u)+(31u-(shade&31u))/5u;
+ color=l->layout==4&&l->cover_active?l->palette[0]:theme_slot()->ink;shade=((color>>11)/2u<<11)|((color>>5&63u)/2u<<5)|((color&31u)/2u);track=((shade>>11)+(31u-(shade>>11))/5u)<<11;track|=((shade>>5&63u)+(63u-(shade>>5&63u))/5u)<<5;track|=(shade&31u)+(31u-(shade&31u))/5u;
  for(y=0;y<72;y++){edge=y<36?y:71u-y;pad=edge<10?inset[edge]:0;for(x=pad;x<224u-pad;x++)blend_pixel(p,48+x,54+y+shift,shade,alpha);}
  left=160u-(32u+14u+(n*6u-1u)*4u)/2u;
  for(y=0;y<13;y++)for(x=0;x<16;x++)if(lyrics_volume_icon(x,y,l->volume_muted||!level))for(dy=0;dy<2;dy++)for(dx=0;dx<2;dx++)blend_pixel(p,left+x*2u+dx,68u+y*2u+dy+shift,0xffff,alpha);

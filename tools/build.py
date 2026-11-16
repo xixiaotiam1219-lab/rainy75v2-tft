@@ -1,7 +1,7 @@
 """Strict, local-input-only firmware patch builder. SPDX-License-Identifier: MIT."""
-import argparse,hashlib,json,os,shutil,struct,subprocess
+import argparse,hashlib,json,os,shutil,struct,subprocess,zlib
 from pathlib import Path
-from assets import generate,ROOT,validate_cache_gif
+from assets import generate,ROOT,validate_cache_gif,resolve_theme,theme_slot_bytes,THEME_SLOT_FIELDS,THEME_SLOT_MAGIC,THEME_SLOT_SIZE,THEME_SLOT_VERSION
 from main_profiles import MAIN_PROFILES
 
 IPS_SHA='32defab7902e57eb972a577fc6cbf3a7e57bc772d59b99f11038370412b77f41'
@@ -60,7 +60,82 @@ def isp_blob(lib,out,clang):
  require(len(blob)<=1280 and 0<=h[4]<len(blob),'SDK blob bounds failed')
  (out/'main-clock-isp-blob.h').write_text('#define ISP_BLOB_SIZE '+str(len(blob))+'u\n#define ISP_CMD_OFFSET '+str(h[4])+'u\nstatic const u8 isp_blob[]={'+','.join(map(str,blob))+'};\n',encoding='utf8')
  return {'sha256':digest(blob),'librarySha256':ISP_SHA,'bytes':len(blob),'entryOffset':h[4]}
+def locate_theme_slot(target_elf,own,clang,low,high,base,image,theme_colors):
+ _,sections,name,symbols,_=elf(own)
+ limit=high-low
+ text_sec=next((s for s in sections if name(s)=='.text'),None)
+ data_sec=next((s for s in sections if name(s)=='.data'),None)
+ bss_sec=next((s for s in sections if name(s)=='.bss'),None)
+ rom_bytes=sum(s[5]for s in sections if (s[2]&2)and s[1]!=8)
+ require(text_sec is not None and text_sec[5]<=limit and rom_bytes<=limit,f'IPS appended sections exceed {limit} bytes ({rom_bytes})')
+ require((data_sec[5]if data_sec else 0)==0,'Unexpected IPS writable .data')
+ require((bss_sec[5]if bss_sec else 0)<=4096,'IPS .bss exceeds 4096-byte state reservation')
+ require('r75_theme' in symbols,'Missing r75_theme symbol in ELF')
+ sym_va=symbols['r75_theme']
+ require(low<=sym_va and sym_va+THEME_SLOT_SIZE<=high,'r75_theme symbol outside code reservation')
+ nm=Path(clang).with_name('llvm-nm'+Path(clang).suffix)
+ if nm.is_file():
+  nm_out=subprocess.check_output([str(nm),str(target_elf)],text=True)
+  nm_syms={}
+  for line in nm_out.splitlines():
+   parts=line.split()
+   if len(parts)>=3 and parts[0]!='U':nm_syms[parts[-1]]=int(parts[0],16)
+  require(nm_syms.get('r75_theme')==sym_va,'llvm-nm r75_theme mismatch')
+ slot_bytes,_,slot_crc=theme_slot_bytes(theme_colors)
+ region_start=low-base
+ region_end=min(len(image),high-base)
+ region=bytes(image[region_start:region_end])
+ matches=[]
+ pos=0
+ while True:
+  idx=region.find(slot_bytes,pos)
+  if idx<0:break
+  matches.append(region_start+idx);pos=idx+1
+ require(len(matches)==1,f'Expected unique R75T slot in appended payload, found {len(matches)}')
+ file_offset=matches[0]
+ require(file_offset==sym_va-base,'R75T fileOffset does not match r75_theme symbol VA')
+ return {'format':'r75t/v1','magic':'R75T','version':THEME_SLOT_VERSION,'fileOffset':file_offset,'bytes':THEME_SLOT_SIZE,'codeStart':low,'imageEnd':high,'applicationBase':base-0x08000000,'fields':list(THEME_SLOT_FIELDS),'crc32':slot_crc}
+def patch_theme_slot(bin_bytes,manifest,theme_input):
+ data=bytearray(bin_bytes)
+ require(isinstance(manifest,dict),'Manifest must be an object')
+ require(manifest.get('format')=='rainy75v2-tft/build-v1','Unsupported manifest format')
+ require(manifest.get('target')=='ips','Only IPS images carry a theme slot')
+ require(manifest.get('applicationBase')==0x4000,'Unexpected IPS applicationBase')
+ require(len(data)==manifest.get('bytes'),'Firmware length does not match manifest')
+ require(digest(bytes(data))==manifest.get('sha256'),'Firmware SHA-256 does not match manifest')
+ slot=manifest.get('themeSlot')
+ require(isinstance(slot,dict),'Manifest missing themeSlot')
+ require(slot.get('format')=='r75t/v1' and slot.get('magic')=='R75T','Unsupported themeSlot format/magic')
+ require(slot.get('version')==THEME_SLOT_VERSION and slot.get('bytes')==THEME_SLOT_SIZE,'Unsupported themeSlot version/size')
+ require(slot.get('applicationBase')==0x4000,'Unexpected themeSlot applicationBase')
+ require(tuple(slot.get('fields')or ())==THEME_SLOT_FIELDS,'Unexpected themeSlot fields')
+ code_start=slot.get('codeStart');image_end=slot.get('imageEnd');file_offset=slot.get('fileOffset')
+ require(isinstance(code_start,int)and isinstance(image_end,int)and isinstance(file_offset,int),'Invalid themeSlot offsets')
+ if 'codeStart' in manifest:require(manifest['codeStart']==code_start,'Manifest codeStart mismatch')
+ if 'imageEnd' in manifest:require(manifest['imageEnd']==image_end,'Manifest imageEnd mismatch')
+ min_off=code_start-0x08004000;max_off=image_end-0x08004000
+ require(min_off>=0 and file_offset>=min_off and file_offset+THEME_SLOT_SIZE<=max_off and file_offset+THEME_SLOT_SIZE<=len(data),'themeSlot offset out of bounds')
+ existing=bytes(data[file_offset:file_offset+THEME_SLOT_SIZE])
+ magic,ver,sz=struct.unpack_from('<IHH',existing,0)
+ existing_crc,=struct.unpack_from('<I',existing,24)
+ calc_crc=zlib.crc32(existing[:24])&0xffffffff
+ require(magic==THEME_SLOT_MAGIC and ver==THEME_SLOT_VERSION and sz==THEME_SLOT_SIZE,'Invalid R75T slot header in binary')
+ require(existing_crc==calc_crc and existing_crc==slot.get('crc32'),'R75T slot CRC-32 mismatch')
+ theme_label,colors=resolve_theme(theme_input)
+ new_slot,_,new_crc=theme_slot_bytes(colors)
+ data[file_offset:file_offset+THEME_SLOT_SIZE]=new_slot
+ patched=bytes(data)
+ updated_manifest=json.loads(json.dumps(manifest))
+ updated_manifest['sha256']=digest(patched)
+ updated_manifest['theme']=theme_label
+ updated_manifest['themeColors']=colors
+ updated_manifest['themeSlot']['crc32']=new_crc
+ return patched,updated_manifest
 def build(a):
+ theme_opt=getattr(a,'theme',None);theme_file=getattr(a,'theme_file',None)
+ require(theme_opt is None or theme_file is None,'Pass either --theme or --theme-file, not both')
+ if theme_file is not None:require(Path(theme_file).is_file(),f'Theme file not found: {theme_file}')
+ theme_arg=Path(theme_file)if theme_file is not None else (theme_opt or 'pink')
  require(not a.lyrics or a.target=='ips' and not a.restore_stock,'--lyrics requires a normal IPS build')
  out=Path(a.out).resolve()/(a.target+'-restore' if a.restore_stock else 'ips-lyrics' if a.lyrics else a.target);out.mkdir(parents=True,exist_ok=True)
  if a.target=='ips':original=checked(a.stock,IPS_SHA);profile=None
@@ -73,7 +148,8 @@ def build(a):
   (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf8');print(json.dumps(manifest));return
  clang=compiler(a)
  if a.target=='ips':
-  generate(a.keys,a.theme,out/'assets',out);linker=ROOT/'firmware/ips/linker.ld';sources=[ROOT/'firmware/ips/native_ui.c',ROOT/'firmware/ips/rtc.c']
+  theme_label,theme_colors=resolve_theme(theme_arg)
+  gif_path=generate(a.keys,theme_arg,out/'assets',out);linker=ROOT/'firmware/ips/linker.ld';sources=[ROOT/'firmware/ips/native_ui.c',ROOT/'firmware/ips/rtc.c']
   flags=['--target=arm-none-eabi','-mcpu=cortex-m4','-mthumb','-mfloat-abi=soft'];low,high=0x0807ec90,0x08080000
   if a.lyrics:
    from fontpack import Font20
@@ -85,9 +161,7 @@ def build(a):
     if notice.resolve()!=(out/name).resolve():shutil.copy2(notice,out/name)
    count,index,offset,fallback,total,crc,hcrc=struct.unpack_from('<7I',font,16)
    (out/'lyrics_font_config.h').write_text(f'#define FONT_COUNT {count}u\n#define FONT_DATA_OFFSET {offset}u\n#define FONT_TOTAL_BYTES {total}u\n#define FONT_BODY_CRC {crc}u\n',encoding='utf8')
-   from assets import load
-   theme=load(ROOT/'profiles/themes.json')[a.theme]
-   validate_cache_gif(out/'assets'/f'robot-{a.theme}.gif',theme)
+   validate_cache_gif(gif_path,theme_colors)
    linker=ROOT/'firmware/ips-lyrics/linker.ld';sources=[ROOT/'firmware/ips-lyrics/native_ui.c',ROOT/'firmware/ips/rtc.c',ROOT/'firmware/ips-lyrics/lyrics.c'];low,high=0x08080000,0x08088000
    meta.update(variant='lyrics-v1',protocol='L6+LY1',requiredFlashKiB=1024,requiredSeries=13,codeStart=low,imageEnd=high,iapEraseEnd=0x080c0000,preservedSettings=[0x080fc000,0x080fe000,0x080ff800],fontSha256=digest(font),fontBodyCrc=crc,titleMaxGlyphs=96,renderSizes=[20,30,40],defaultLayout=1,layouts=['classic20','caption40','focus40','double40','immersive48'],fontReplacementProtocol='fixed-font-v1',temporaryCoverProtocol='RAM48-v3',volumeProtocol='OP30-v1')
  else:
@@ -111,7 +185,8 @@ def build(a):
   if a.lyrics:
    require(len(image)+base<=high,'Lyrics image exceeds audited interval');image.extend(b'\xff'*(high-base-len(image)))
   else:image.extend(b'\xff'*((-len(image))%512))
-  pid=0x3078;meta.update(theme=a.theme,uiVersion='0.6.3',moduleRam='0x2005f000..0x20060000');meta.setdefault('protocol','L6')
+  theme_slot=locate_theme_slot(target,own,clang,low,high,base,image,theme_colors)
+  pid=0x3078;meta.update(codeStart=low,imageEnd=high,theme=theme_label,themeColors=theme_colors,themeSlot=theme_slot,uiVersion='0.6.3',moduleRam='0x2005f000..0x20060000');meta.setdefault('protocol','L6')
  else:
   for addr,old,symbol,rd in [(profile['ipsHook'],profile['ipsHandler'],'rainy_main_rtc_probe',0),(profile['rtcHook'],profile['rtcInit'],'rainy_main_rtc_init',1)]:patch(addr-base,jal(addr,old,rd),jal(addr,symbols[symbol],rd))
   for addr,following,symbol in [(profile['workerA'],profile['nextA'],'rainy_clock_worker_a'),(profile['workerB'],profile['nextB'],'rainy_clock_worker_b')]:patch(addr-0x20000000+4,jal(addr,profile['collector'],1)+jal(addr+4,following,1),far_call(addr,symbols[symbol]))
@@ -122,4 +197,4 @@ def build(a):
  manifest={'format':'rainy75v2-tft/build-v1','target':a.target,'status':'experimental; hardware validation incomplete','bytes':len(image),'sha256':digest(image),'stockSha256':digest(original),'applicationBase':0x4000 if a.target=='ips' else 0x2000,'iapPid':pid,'appPid':0x3075,'patches':[{'fileOffset':p,'bytes':n} for p,n in patches],**meta}
  (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf8');print(json.dumps(manifest))
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('target',choices=['ips','main']);p.add_argument('--stock',type=Path,required=True);p.add_argument('--isp-lib',type=Path);p.add_argument('--restore-stock',action='store_true');p.add_argument('--clang');p.add_argument('--riscv-march',default='rv32imac_zicsr_zifencei');p.add_argument('--out',type=Path,default=ROOT/'build');p.add_argument('--keys',type=Path,default=ROOT/'profiles/keys.json');p.add_argument('--theme',default='pink');p.add_argument('--lyrics',action='store_true');p.add_argument('--font',type=Path);build(p.parse_args())
+ p=argparse.ArgumentParser();p.add_argument('target',choices=['ips','main']);p.add_argument('--stock',type=Path,required=True);p.add_argument('--isp-lib',type=Path);p.add_argument('--restore-stock',action='store_true');p.add_argument('--clang');p.add_argument('--riscv-march',default='rv32imac_zicsr_zifencei');p.add_argument('--out',type=Path,default=ROOT/'build');p.add_argument('--keys',type=Path,default=ROOT/'profiles/keys.json');p.add_argument('--theme');p.add_argument('--theme-file',type=Path);p.add_argument('--lyrics',action='store_true');p.add_argument('--font',type=Path);build(p.parse_args())

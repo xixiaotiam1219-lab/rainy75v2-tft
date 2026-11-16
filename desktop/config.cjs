@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: MIT
 'use strict';
-const path=require('node:path');
+const fs=require('node:fs'),path=require('node:path');
 const ROOT=path.resolve(__dirname,'..');
-module.exports={ROOT,DATA:path.resolve(process.env.RAINY75_DATA||path.join(ROOT,'local/lyrics')),FONT:path.resolve(process.env.RAINY75_FONT||path.join(ROOT,'build/ips-lyrics/FONT.BIN'))};
+const portableRuntime=fs.existsSync(path.join(ROOT,'..','runtime','node.exe'));
+const defaultData=portableRuntime?path.resolve(ROOT,'..','data'):path.join(ROOT,'local/lyrics');
+const portableFont=path.join(ROOT,'FONT.BIN');
+const defaultFont=fs.existsSync(portableFont)?portableFont:path.join(ROOT,'build/ips-lyrics/FONT.BIN');
+module.exports={ROOT,DATA:path.resolve(process.env.RAINY75_DATA||defaultData),FONT:path.resolve(process.env.RAINY75_FONT||defaultFont)};
