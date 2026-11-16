@@ -1188,7 +1188,24 @@ def _escape_inline_json(json_text: str) -> str:
 
 
 def _check_no_external_urls(text: str, source_label: str) -> None:
-  if re.search(r'(?:src|href)\s*=\s*["\']https?://', text, re.IGNORECASE):
+  def allow_project_download(match: re.Match[str]) -> str:
+    tag = match.group(0)
+    hrefs = list(re.finditer(r'\bhref\s*=\s*(["\'])(.*?)\1', tag, re.IGNORECASE))
+    if len(hrefs) != 1:
+      return tag
+    href = hrefs[0]
+    if not re.fullmatch(r'https://github\.com/xixiaotiam1219-lab/rainy75v2-tft/releases(?:/tag/v[0-9A-Za-z.+_-]+)?', href.group(2)):
+      return tag
+    if not re.search(r'\btarget\s*=\s*(["\'])_blank\1', tag, re.IGNORECASE):
+      return tag
+    rel = re.search(r'\brel\s*=\s*(["\'])(.*?)\1', tag, re.IGNORECASE)
+    if not rel or not {'noopener', 'noreferrer'}.issubset(rel.group(2).lower().split()):
+      return tag
+    # A user-clicked project download is navigation, not a runtime dependency.
+    return tag[:href.start(2)] + '#project-download' + tag[href.end(2):]
+
+  checked = re.sub(r'<a\b[^>]*>', allow_project_download, text, flags=re.IGNORECASE)
+  if re.search(r'(?:src|href)\s*=\s*["\']https?://', checked, re.IGNORECASE):
     raise ValueError(f'Forbidden external http(s) src/href in {source_label}')
   if re.search(r'@import\s+(?:url\s*\(\s*)?["\']?https?://', text, re.IGNORECASE):
     raise ValueError(f'Forbidden external @import URL in {source_label}')

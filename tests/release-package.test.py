@@ -276,6 +276,23 @@ class ReleasePackageTests(unittest.TestCase):
     self.assertEqual(info['moduleCount'], 1)
     self.assertNotIn('src="app.mjs"', bundled)
 
+  def test_project_download_navigation_is_allowed_without_allowing_external_resources(self):
+    url = 'https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/v0.2.0-alpha.6'
+    link = f'<a href="{url}" target="_blank" rel="noopener noreferrer">简易部署脚本下载</a>'
+    with tempfile.TemporaryDirectory() as td:
+      entry = Path(td) / 'studio.html'
+      entry.write_text(f'<html><body>{link}</body></html>', 'utf8')
+      bundled = release_tool.bundle_html(entry)
+      self.assertIn(link, bundled)
+      release_tool.verify_release_html(bundled, require_bundle_payload=False)
+      for bad in [f'<script src="{url}"></script>', f'<link rel="stylesheet" href="{url}">',
+                  f'<a href="{url}">download</a>', link.replace('github.com/', 'github.com.evil.example/'),
+                  link.replace('rainy75v2-tft/releases', 'other-project/releases')]:
+        with self.subTest(tag=bad):
+          entry.write_text(f'<html><body>{bad}</body></html>', 'utf8')
+          with self.assertRaises(ValueError):
+            release_tool.bundle_html(entry)
+
   def test_bundle_html_handles_all_studio_mjs_modules_and_node_check(self):
     with tempfile.TemporaryDirectory() as td:
       web_copy = Path(td) / 'web'
