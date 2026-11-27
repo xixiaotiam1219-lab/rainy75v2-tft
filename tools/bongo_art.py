@@ -1,7 +1,7 @@
 """Bake a locally supplied Mver keyboard skin for the native 320x172 panel."""
 import json
 import numpy as np
-from PIL import Image, ImageDraw, ImageChops
+from PIL import Image, ImageDraw, ImageChops, ImageFont
 from assets import rgb565
 
 
@@ -136,11 +136,12 @@ def render(model, desk_image, out):
         outline="#161616",
         width=4,
     )
+    font = ImageFont.truetype("arialbd.ttf", 36)
+    small = ImageFont.truetype("arialbd.ttf", 23)
     caps = {}
     keys = {}
     hands = {}
     legend = {}
-    labels = {}
 
     def row(y, items):
         x = 0.1
@@ -151,10 +152,15 @@ def render(model, desk_image, out):
                     for v in (x + 0.035, y + 0.025, x + width - 0.035, y + 0.93)
                 )
                 layout.rounded_rectangle(
-                    box, radius=7, fill="white", outline="#252525", width=5
+                    box, radius=7, fill="white", outline="#262626", width=3
                 )
-                labels[code] = label
-                # Labels are rasterized after projection at panel resolution.
+                layout.text(
+                    ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2),
+                    label,
+                    font=font if len(label) < 3 else small,
+                    fill="#181818",
+                    anchor="mm",
+                )
                 legend[code] = box
             x += width
 
@@ -215,7 +221,7 @@ def render(model, desk_image, out):
         ],
     )
     # Top-left in the cat's view is the bottom-right corner in the viewer's view.
-    corners = [(542, 352), (134, 289), (221, 193), (606, 264)]
+    corners = [(530, 353), (197, 284), (302, 209), (602, 262)]
     plane = [(0, 0), (board.width, 0), (board.width, board.height), (0, board.height)]
     matrix = []
     rhs = []
@@ -236,7 +242,18 @@ def render(model, desk_image, out):
     keep = Image.new("L", scene.size)
     dr = ImageDraw.Draw(keep)
     dr.polygon([(0, 147), (611, 254), (611, 266), (0, 160)], fill=255)
-
+    dr.polygon(
+        [
+            (75, 190),
+            (260, 219),
+            (260, 234),
+            (233, 266),
+            (168, 268),
+            (158, 297),
+            (80, 291),
+        ],
+        fill=255,
+    )
     scene.alpha_composite(Image.composite(desk, Image.new("RGBA", scene.size), keep))
     scene.alpha_composite(project(board))
     original = {}
@@ -320,105 +337,19 @@ def render(model, desk_image, out):
         d.line(poly, width=2, fill="black", joint="curve")
         return im
 
-    # Each hex digit is one three-pixel row of the key legend.
-    glyph = dict(
-        zip(
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-            "25755 65656 34443 65556 74647 74644 34553 55755 72227 11152 55655 44447 57755 57775 25552 65644 25573 65655 34216 72222 55557 55552 55775 55255 55222 71247".split(),
-        )
-    )
-    glyph.update(
-        zip(
-            "0123456789",
-            "75557 26227 61247 61216 55711 74616 34652 71222 25252 25316".split(),
-        )
-    )
-    glyph.update(
-        {
-            "-": "00070",
-            "=": "07070",
-            "[": "64446",
-            "]": "31113",
-            "\\": "44211",
-            ";": "02024",
-            "'": "22000",
-            ",": "00024",
-            ".": "00002",
-            "/": "11244",
-            chr(96): "42000",
+    for k, x, y in [(80, 112, 212), (82, 163, 226), (79, 219, 242), (81, 126, 264)]:
+        corners = {
+            80: [(107, 196), (140, 201), (122, 226), (84, 218)],
+            82: [(158, 209), (192, 215), (171, 241), (135, 233)],
+            79: [(212, 220), (251, 229), (228, 258), (188, 248)],
+            81: [(116, 243), (154, 251), (131, 284), (93, 275)],
         }
-    )
-    short = {
-        "ESC": "ES",
-        "PRT": "PR",
-        "DEL": "DL",
-        "BKSP": "BS",
-        "TAB": "TB",
-        "CAPS": "CP",
-        "ENTER": "EN",
-        "SHIFT": "SH",
-        "SPACE": "SP",
-        "CTRL": "CT",
-        "WIN": "WN",
-        "ALT": "AL",
-        "PGU": "PU",
-        "PGD": "PD",
-        "END": "ED",
-        "INS": "IN",
-    }
-    for code, label in labels.items():
-        mask = caps[code]
-        x0, y0, x1, y1 = mask.getbbox()
-        cx = (x0 + x1 - 1) / 2
-        cy = (y0 + y1 - 1) / 2
-        word = short.get(label.upper(), label.upper())
-        width = len(word) * 4 - 1
-        for index, ch in enumerate(word):
-            for j, bits in enumerate(glyph[ch]):
-                for col in range(3):
-                    if not (int(bits) & (4 >> col)):
-                        continue
-                    dx = (width - 1) / 2 - index * 4 - col
-                    x = round(cx + dx + 0.001)
-                    y = round(cy + 2 - j + dx * 0.13 + 0.001)
-                    if mask.getpixel((x, y)):
-                        for frame in backgrounds:
-                            frame.putpixel((x, y), (26, 26, 26))
-
-    # One regular inverted T, with four equal caps on the same inclined plane.
-    def on_desk(col, row):
-        return round(49 + col * 19 - row * 5), round(113 + col * 3 + row * 14)
-
-    icon = {82: [(-4, 0), (0, -4), (4, 0), (1, 0), (1, 3), (-1, 3), (-1, 0)]}
-    for k, col, row, rot in [
-        (82, 0, -1, 0),
-        (80, -1, 0, 3),
-        (81, 0, 0, 2),
-        (79, 1, 0, 1),
-    ]:
-        cx, cy = on_desk(col, row)
-        corners = [
-            (cx - 6, cy - 6),
-            (cx + 10, cy - 3),
-            (cx + 6, cy + 6),
-            (cx - 10, cy + 3),
-        ]
-        mask = Image.new("L", size)
-        ImageDraw.Draw(mask).polygon(corners, fill=255)
-        caps[k] = mask
-        a, b, c, d = mask.getbbox()
-        keys[k] = a, b, c - 1, d - 1
-        hands[k] = arrow_paw(cx, cy)
-        symbol = []
-        for x, y in icon[82]:
-            for _ in range(rot):
-                x, y = -y, x
-            symbol.append((cx + x, cy + y))
-        for im in backgrounds:
-            draw = ImageDraw.Draw(im)
-            draw.polygon(corners, fill="white", outline="#2c2c2c")
-            draw.polygon(symbol, fill="#181818")
-
+        mask = Image.new("L", (612, 354))
+        ImageDraw.Draw(mask).polygon(corners[k], fill=255)
+        caps[k] = scaled(mask).point(lambda v: 255 if v >= 128 else 0)
+        a, b, c, d = caps[k].getbbox()
+        keys[k] = (a, b, c - 1, d - 1)
+        hands[k] = arrow_paw(round(x * 320 / 612), round(y * 172 / 354))
     # Encode opaque backgrounds once, deduplicating scanlines. Hand rows use outline widths from actual silhouette.
     colors = [
         "#000000",
