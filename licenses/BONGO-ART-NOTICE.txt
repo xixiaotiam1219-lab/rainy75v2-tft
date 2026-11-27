@@ -1,0 +1,22 @@
+Bongo Cat artwork and attribution
+=================================
+
+This Rainy75 V2 package adapts the Bongo Cat keyboard scene for a 320 × 172 display.
+
+Original cat artwork: StrayRogue.
+Bongo Cat meme: DitzyFlama.
+Reference and credits: https://github.com/Externalizable/bongo.cat
+
+Cat and paw layers: Bongo Cat Mver 0.1.6 F1–F12 skin.
+Upstream project: https://github.com/MMmmmoko/Bongo-Cat-Mver
+
+Desk edge and arrow-key artwork: ayangweb/BongoCat, Copyright 2025-present ayangweb.
+Source: https://github.com/ayangweb/BongoCat/blob/47a73ed1765b13fdd674ec356d51b5b16a6b5a5b/resources/models/keyboard/resources/background.png
+Upstream Apache-2.0 project license: ayangweb-BongoCat-Apache-2.0.txt
+
+This adaptation crops and rescales the artwork, draws the slanted keyboard,
+maps the native key notifications to cap highlights and paw poses, and
+encodes the resulting frame and sprites in the GIF and screen firmware.
+
+The project’s own source code is MIT-licensed. Third-party artwork remains
+credited to its respective rights holders.

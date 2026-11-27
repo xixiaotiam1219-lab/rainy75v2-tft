@@ -176,6 +176,9 @@ def write_edition(output, frozen, firmware, font, edition, bongo=None):
     write_launcher(directory)
     extra = ('NodeJS-LICENSE.txt',) + (('netease-elog-MIT.txt', 'node-hid-LICENSE.txt', 'Noto-OFL-1.1.txt') if lyric else ())
     notices(directory, frozen, extra)
+    if bongo and fw['ipsBongo']['manifest']['petIdentity'] == 0x4247:
+        copy_named(ROOT / 'licenses', directory / 'licenses',
+                   ('ayangweb-BongoCat-Apache-2.0.txt', 'BONGO-ART-NOTICE.txt'))
     (directory / '使用说明.md').write_text(
         f'# {title}\n\n'
         '1. 解压整个 ZIP，双击 **点我安装.cmd**。\n'
@@ -188,7 +191,7 @@ def write_edition(output, frozen, firmware, font, edition, bongo=None):
         + '若要清理旧歌词字库，可在刷桌宠版前打开页面底部「删除屏内字库」。\n\n'
           '安装会替换小屏第 1 个 GIF。若小屏仍是原厂界面，暂停歌词同步后在 WOBHub 选 GIF 槽位 1，再退出 WOBHub。\n'
           '安装中断时保持 USB 供电，在原窗口点「再试这一步」。若已关闭窗口且只看到升级设备，'
-          '请按[固件包和恢复说明](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/v0.2.0-alpha.9)处理。\n', 'utf8')
+          '请按[固件包和恢复说明](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/v0.2.0-alpha.10)处理。\n', 'utf8')
     package_zip(directory, output / f'rainy75v2-{name}-windows-x64.zip')
 
 
@@ -245,17 +248,16 @@ def main():
     parser.add_argument('--bongo-dir', type=Path, help='Pack just Bongo Cat from this verified build')
     parser.add_argument('--bongo-preview', type=Path, help='Path to this build’s 320×172 idle preview PNG')
     parser.add_argument('--all-editions', action='store_true', help='Add the six standard packages to the public Bongo Cat release')
-    parser.add_argument('--local-art', action='store_true', help='Package the Mver-based build for local personal use only')
+    parser.add_argument('--mver-art', '--local-art', dest='mver_art', action='store_true',
+                        help='Package the verified Bongo Cat build that uses the Mver skin')
     args = parser.parse_args()
     verify_release_dir(args.public)
     firmware, restore = load_firmware(args.public, args.main071)
     font = (args.public / '固件与素材/FONT.BIN').read_bytes()
     if int.from_bytes(font[36:40], 'little') != firmware['ipsLyrics']['manifest']['fontBodyCrc']:
         raise ValueError('Packaged font does not match the lyrics image')
-    if args.local_art and not args.bongo_dir:
-        parser.error('--local-art requires --bongo-dir')
-    if args.all_editions and (not args.bongo_dir or args.local_art):
-        parser.error('--all-editions requires the public Bongo Cat build')
+    if (args.mver_art or args.all_editions) and not args.bongo_dir:
+        parser.error('--mver-art and --all-editions require --bongo-dir')
     args.out.mkdir(parents=True, exist_ok=False)
     if args.bongo_dir:
         build = args.bongo_dir
@@ -264,14 +266,14 @@ def main():
         model = json.loads((build / 'bongo-model-validation.json').read_text('utf8'))
         expected = (
             (0x4247, '5d7b087f4f2e41eba3b803ef39ab4c0cb41b113b5f68ce4e8bbb24753106c940',
-             '76bf75daa5044046d4416035587ff8967638a018e838d85ecb5fce931d003672') if args.local_art else
+             '76bf75daa5044046d4416035587ff8967638a018e838d85ecb5fce931d003672') if args.mver_art else
             (0x4248, '58d6c3d5bd6810502b7d2d9c308702327588694d80b3fd192912953ad4035b7e',
              'd336f8a0e057d5e9aa43a9b040c720c3e9a23e04668fae720710b5ed7be332a9')
         )
         identity, image_sha, gif_sha = expected
         if (manifest.get('petIdentity') != identity or entry['sha256'] != image_sha
                 or model.get('passed') is not True or model.get('sha256') != image_sha
-                or not args.local_art and manifest.get('petArtLicense') != 'MIT'):
+                or not args.mver_art and manifest.get('petArtLicense') != 'MIT'):
             raise ValueError('Bongo Cat build does not match its verified artwork and model')
         if manifest.get('petGif') != 'assets/bongo-base-pink.gif':
             raise ValueError('Unexpected Bongo Cat GIF path')
@@ -279,8 +281,15 @@ def main():
         if sha256_bytes(gif) != gif_sha:
             raise ValueError('Bongo Cat GIF does not match this build')
         image_bytes(entry, 'ipsBongo')
+        if args.mver_art:
+            manifest['petArtLicense'] = 'Third-party artwork; see licenses/BONGO-ART-NOTICE.txt'
         firmware['ipsBongo'] = entry
         preview = (args.bongo_preview or build / 'preview/bongo-idle-320.png').resolve()
+        if args.mver_art:
+            with Image.open(preview) as screenshot:
+                expected_pixels = '312ff5e9089592c385fc3c8cce2deb6ac7e7baddd6a1e07b43543b8229460eba'
+                if screenshot.size != (320, 172) or sha256_bytes(screenshot.convert('RGB').tobytes()) != expected_pixels:
+                    raise ValueError('Bongo Cat preview does not match the verified Mver skin')
         write_edition(args.out, args.public, firmware, font, ('bongocat', 'Bongo Cat 白猫按键版', None, preview), gif)
         if not args.all_editions:
             return

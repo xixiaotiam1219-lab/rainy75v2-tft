@@ -8,6 +8,7 @@ from release import ROOT, bundle_html, sha256_bytes, sha256_file, verify_release
 
 SOURCE = (
     'LICENSE', 'DISCLAIMER.md', 'docs/keymap-pet.md',
+    'licenses/BONGO-ART-NOTICE.txt', 'licenses/ayangweb-BongoCat-Apache-2.0.txt',
     'profiles/font.json', 'profiles/keys.json', 'profiles/themes.json',
     'firmware/ips/native_ui.c', 'firmware/ips/native_ui.h', 'firmware/ips/rtc.c',
     'firmware/ips/keymap_pet.h', 'firmware/ips-lyrics/linker.ld',

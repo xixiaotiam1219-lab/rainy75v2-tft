@@ -67,6 +67,6 @@
 
 ## Bongo Cat 白猫按键版
 
-[ayangweb/BongoCat](https://github.com/ayangweb/BongoCat) 是白猫功能的上游项目，其项目许可证为 [Apache-2.0](https://github.com/ayangweb/BongoCat/blob/master/LICENSE)，署名为 ayangweb。公开固件采用本项目原创猫、爪和桌沿图层。
+白猫发布包采用 Bongo Cat Mver 的猫和爪图层，以及上游 ayangweb/BongoCat 的桌沿与方向键素材。适配包含下采样、透视键盘绘制、键帽匹配和屏幕渲染。[素材声明](licenses/BONGO-ART-NOTICE.txt)
 
-本地可选皮肤使用独立取得的 Bongo Cat Mver 猫和爪图层，以及 ayangweb/BongoCat 的桌沿参考图。原图版权沿用原权利人的声明。项目的 [MIT License](LICENSE) 覆盖项目源码和公开版原创图层。构建说明见 [白猫按键版](docs/keymap-pet.md)。
+项目自有源码和原创图层沿用 [MIT License](LICENSE)。上游 ayangweb/BongoCat 项目的 Apache-2.0 许可文本随白猫包附上，各素材的版权归原权利人。[上游 Apache-2.0 许可证](licenses/ayangweb-BongoCat-Apache-2.0.txt)

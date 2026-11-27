@@ -118,7 +118,7 @@ def build(a):
         "petLayout": "fullscreen320x172",
         "variant": "bongo-v1",
         "petEnabled": True,
-        "petArtLicense": "MIT" if a.public_art else "User-provided Mver assets for personal use",
+        "petArtLicense": "MIT" if a.public_art else "Third-party Bongo Cat Mver artwork; see licenses/BONGO-ART-NOTICE.txt",
         "petGif": gif.relative_to(out).as_posix(),
         "petIdentity": 0x4248 if a.public_art else 0x4247,
     }
