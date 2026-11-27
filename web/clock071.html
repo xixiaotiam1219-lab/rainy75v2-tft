@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rainy75 V2 · 0.71 主控与校频</title>
+  <style>
+    :root{color-scheme:light dark;font-family:system-ui,"Microsoft YaHei",sans-serif}
+    body{max-width:44rem;margin:3rem auto;padding:0 1.25rem;line-height:1.6}
+    h1{line-height:1.2;margin-bottom:.25em} h2{font-size:1.2rem}
+    section{border-top:1px solid GrayText;padding:1rem 0}
+    button,select{font:inherit;padding:.4rem .65rem;margin:.2rem .2rem .2rem 0}
+    progress{display:block;width:100%;margin-top:.6rem}
+    output{display:block;margin-top:.6rem;min-height:2em;overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+  <h1>0.71 主控与校频</h1>
+  <p>Rainy75 V2 · 使用 USB 有线连接，退出 WOBHub 和歌词后台。</p>
+  <section>
+    <h2>更新主控</h2>
+    <p>先核对主控版本，再连接升级设备。写入和校验结束前请保持 USB 连接。</p>
+    <button id="enter" type="button" disabled>连接键盘并进入升级模式</button>
+    <button id="flash" type="button" disabled>选择升级设备并写入</button>
+    <progress id="flash-progress" value="0" max="100" aria-label="烧录进度"></progress>
+    <output id="flash-status" aria-live="polite">正在核对固件…</output>
+    <details>
+      <summary>恢复原厂 0.71</summary>
+      <p>仅用于主控已在 0x3079 升级模式时，恢复本页配套的原厂镜像。</p>
+      <button id="restore" type="button" disabled>选择升级设备并恢复</button>
+    </details>
+  </section>
+  <section>
+    <h2>测量走时并校准</h2>
+    <p>主控更新后执行一次。页面会测量这把键盘的实际走时频率，并按电脑本地时间校准。</p>
+    <label for="sample-minutes">测量时长</label>
+    <select id="sample-minutes"><option value="10">10 分钟</option><option value="20">20 分钟</option></select>
+    <button id="measure" type="button">测量并校准</button>
+    <button id="reuse" type="button" disabled>用上次频率重新校时</button>
+    <button id="cancel" type="button" disabled>取消测量</button>
+    <progress id="measure-progress" value="0" max="100" aria-label="校频进度"></progress>
+    <output id="measure-status" aria-live="polite"></output>
+  </section>
+  <script type="module" src="./clock071.mjs"></script>
+</body>
+</html>

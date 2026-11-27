@@ -38,6 +38,10 @@ def jal(source,target,rd=0):
 def far_call(source,target):
  d=target-source;hi=(d+0x800)>>12;lo=d-hi*4096;require(-2048<=lo<=2047,'Invalid far call')
  return struct.pack('<II',((hi&0xfffff)<<12)|(1<<7)|0x17,((lo&0xfff)<<20)|(1<<15)|(1<<7)|0x67)
+def far_tail(source,target):
+ hi=(target-source+0x800)>>12;lo=target-source-hi*4096
+ require(-2048<=lo<=2047,'Invalid far jump')
+ return struct.pack('<II',((hi&0xfffff)<<12)|(5<<7)|0x17,((lo&0xfff)<<20)|(5<<15)|0x67)
 def isp_blob(lib,out,clang):
  archive=checked(lib,ISP_SHA);require(archive[:8]==b'!<arch>\n','Expected SDK ar archive');p=8;obj=None
  while p<len(archive):
@@ -165,11 +169,20 @@ def build(a):
    linker=ROOT/'firmware/ips-lyrics/linker.ld';sources=[ROOT/'firmware/ips-lyrics/native_ui.c',ROOT/'firmware/ips/rtc.c',ROOT/'firmware/ips-lyrics/lyrics.c'];low,high=0x08080000,0x08088000
    meta.update(variant='lyrics-v1',protocol='L6+LY1',requiredFlashKiB=1024,requiredSeries=13,codeStart=low,imageEnd=high,iapEraseEnd=0x080c0000,preservedSettings=[0x080fc000,0x080fe000,0x080ff800],fontSha256=digest(font),fontBodyCrc=crc,titleMaxGlyphs=96,renderSizes=[20,30,40],defaultLayout=1,layouts=['classic20','caption40','focus40','double40','immersive48'],fontReplacementProtocol='fixed-font-v1',temporaryCoverProtocol='RAM48-v3',volumeProtocol='OP30-v1')
  else:
-  require(a.isp_lib,'--isp-lib is required for main firmware');meta['isp']=isp_blob(Path(a.isp_lib).resolve(),out,clang)
-  (out/'main_addresses.h').write_text('/* SPDX-License-Identifier: MIT; exact hash-selected profile. */\n'+''.join(f'#define {name} 0x{profile[key]:x}\n'for name,key in [('MAIN_IPS_HANDLER','ipsHandler'),('MAIN_RTC_INIT','rtcInit'),('MAIN_RX_BUFFER','rx'),('MAIN_WORKER_A_NEXT','nextA'),('MAIN_WORKER_B_NEXT','nextB')]),encoding='utf8')
-  low=(0x2000+len(original)+15)&~15;high=0x49000;linker=out/'main.ld'
-  linker.write_text(f'ENTRY(rainy_main_rtc_probe)\nPHDRS {{ probe PT_LOAD FLAGS(5); }}\nSECTIONS {{ . = 0x{low:x}; .text : {{ *(.text*) *(.rodata*) }} :probe .data : {{ *(.data*) }} .bss : {{ *(.bss*) *(COMMON) }} /DISCARD/ : {{ *(.eh_frame*) *(.comment*) *(.riscv.attributes*) }} }}\nASSERT(SIZEOF(.data)==0 && SIZEOF(.bss)==0,"Unexpected static RAM")\nASSERT(. <= 0x49000,"Code overlaps clock data")\n',encoding='utf8')
-  sources=[ROOT/'firmware/main/clock_bridge.c'];flags=['--target=riscv32-none-elf','-march='+a.riscv_march,'-mabi=ilp32','-mno-relax','-msmall-data-limit=0','-Wl,--no-relax']
+  fields=[('MAIN_IPS_HANDLER','ipsHandler'),('MAIN_RTC_INIT','rtcInit'),('MAIN_RX_BUFFER','rx'),('MAIN_WORKER_A_NEXT','nextA'),('MAIN_WORKER_B_NEXT','nextB')]
+  journal=profile.get('journalStart')
+  extra=''
+  if journal is None:
+   require(a.isp_lib,'--isp-lib is required for older main firmware');meta['isp']=isp_blob(Path(a.isp_lib).resolve(),out,clang)
+  else:
+   fields += [('MAIN_ISP_PROGRAM','ispProgram'),('MAIN_JOURNAL_START','journalStart'),('MAIN_IMAGE_LIMIT','imageLimit'),('MAIN_ACK_OFFSET','ackOffset'),('MAIN_SCREEN_ENABLED_OFFSET','screenEnabledOffset'),('MAIN_RX_LENGTH_OFFSET','rxLengthOffset')]
+   extra=f'#define MAIN_COLLECTOR_BODY {profile["collector"]+8:#x}\n'
+  (out/'main_addresses.h').write_text('/* SPDX-License-Identifier: MIT; exact hash-selected profile. */\n'+extra+''.join(f'#define {name} ({profile[key]:#x})\n' if profile[key]<0 else f'#define {name} {profile[key]:#x}\n' for name,key in fields),encoding='utf8')
+  low=(0x2000+len(original)+15)&~15;high=journal or 0x49000;linker=out/'main.ld'
+  require(low<high<=0x4a000 and profile.get('imageLimit',0x4a000)==0x4a000,'Main program/app bounds mismatch')
+  linker.write_text(f'ENTRY(rainy_main_rtc_probe)\nPHDRS {{ probe PT_LOAD FLAGS(5); }}\nSECTIONS {{ . = 0x{low:x}; .text : {{ *(.text*) *(.rodata*) }} :probe .data : {{ *(.data*) }} .bss : {{ *(.bss*) *(COMMON) }} /DISCARD/ : {{ *(.eh_frame*) *(.comment*) *(.riscv.attributes*) }} }}\nASSERT(SIZEOF(.data)==0 && SIZEOF(.bss)==0,"Unexpected static RAM")\nASSERT(. <= 0x{high:x},"Code overlaps clock data")\n',encoding='utf8')
+  sources=[ROOT/'firmware/main'/('clock_bridge_071.c' if journal else 'clock_bridge.c')];flags=['--target=riscv32-none-elf','-march='+a.riscv_march,'-mabi=ilp32','-mno-relax','-msmall-data-limit=0','-Wl,--no-relax']
+  if journal:flags.append('-fno-jump-tables')
  target=out/'module.elf';run([clang,*flags,'-ffreestanding','-fno-builtin','-Oz','-Wall','-Wextra','-Werror','-nostdlib','-fuse-ld=lld','-I',out,'-Wl,-T,'+str(linker),*sources,'-o',target])
  own=target.read_bytes();_,_,_,symbols,segments=elf(own)
  for kind,off,va,pa,n,memsize,flags,align in segments:
@@ -189,8 +202,14 @@ def build(a):
   pid=0x3078;meta.update(codeStart=low,imageEnd=high,theme=theme_label,themeColors=theme_colors,themeSlot=theme_slot,uiVersion='0.6.3',moduleRam='0x2005f000..0x20060000');meta.setdefault('protocol','L6')
  else:
   for addr,old,symbol,rd in [(profile['ipsHook'],profile['ipsHandler'],'rainy_main_rtc_probe',0),(profile['rtcHook'],profile['rtcInit'],'rainy_main_rtc_init',1)]:patch(addr-base,jal(addr,old,rd),jal(addr,symbols[symbol],rd))
-  for addr,following,symbol in [(profile['workerA'],profile['nextA'],'rainy_clock_worker_a'),(profile['workerB'],profile['nextB'],'rainy_clock_worker_b')]:patch(addr-0x20000000+4,jal(addr,profile['collector'],1)+jal(addr+4,following,1),far_call(addr,symbols[symbol]))
-  require(len(image)+base<=0x49000,'Code reaches data page');image.extend(b'\xff'*(0x4a000-base-len(image)));pid=0x3079;meta.update(protocol='V7.1',capability='0x4350',clockDataPage='0x49000..0x49fff',stockVersion=profile['stockVersion'],mainProfile=profile)
+  if journal:
+   addr=profile['collector'];patch(addr-0x20000000+4,bytes.fromhex(profile['collectorEntry']),far_tail(addr,symbols['rainy_clock_collector']))
+  else:
+   for addr,following,symbol in [(profile['workerA'],profile['nextA'],'rainy_clock_worker_a'),(profile['workerB'],profile['nextB'],'rainy_clock_worker_b')]:patch(addr-0x20000000+4,jal(addr,profile['collector'],1)+jal(addr+4,following,1),far_call(addr,symbols[symbol]))
+  require(len(image)+base<=high,'Code reaches clock data');image.extend(b'\xff'*(0x4a000-base-len(image)));pid=0x3079
+  meta.update(protocol='V7.2' if journal else 'V7.1',capability='0x4350',stockVersion=profile['stockVersion'],mainProfile=profile)
+  if journal:meta.update(codeStart=low,clockJournal={'start':journal,'endExclusive':0x4a000,'recordBytes':16,'slots':(0x4a000-journal)//16},clockRateUnit='millihertz')
+  else:meta['clockDataPage']='0x49000..0x49fff'
  allowed={i for start,n in patches for i in range(start,start+n)}
  require(image[:512]==original[:512] and all(x==y or i in allowed for i,(x,y) in enumerate(zip(original,image))),'Unexpected factory modifications')
  binfile=out/f'rainy75v2-{a.target}.bin';binfile.write_bytes(image)

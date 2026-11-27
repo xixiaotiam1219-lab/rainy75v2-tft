@@ -80,6 +80,7 @@ function resolveDefaults(options = {}) {
   const port = options.port !== undefined ? Number(options.port) : 8765;
   return {
     htmlPath,
+    edition: config?.EDITION || null,
     desktopDir,
     dataDir,
     fontPath: fontPath ? path.resolve(fontPath) : null,
@@ -278,6 +279,7 @@ function createGuiServer(options = {}) {
       connected: false,
       mode: null,
       layout: null,
+      edition: null,
       demo: false,
       startupEnabled,
       external: serviceFile !== path.join(cfg.dataDir, 'background-service.json'),
@@ -301,6 +303,7 @@ function createGuiServer(options = {}) {
         mode: state.wire?.mode ?? state.wantedMode ?? state.settings?.mode ?? null,
         layout: state.settings?.layout ?? state.wire?.layout ?? null,
         demo: Boolean(state.demo),
+        edition: state.edition || null,
         startupEnabled,
         external: base.external,
       };
@@ -503,6 +506,8 @@ function createGuiServer(options = {}) {
       }
       if (url.pathname === '/api/background/start') {
         const body = await readJsonBody(req);
+        if (cfg.edition?.layout === null) throw new Error('桌宠与按键版无需歌词后台');
+        if (cfg.edition && body.settings !== undefined) throw new Error('安装包版式已固定');
         const before = await queryBackgroundStatus();
         if (before.instances.some(item => item.unreachable)) throw Object.assign(new Error('现有后台未响应，请退出后再启动'), { statusCode: 409 });
         if (before.instances.some(item => item.external)) throw Object.assign(new Error('另一个安装目录的后台正在运行，请先停止旧后台'), { statusCode: 409 });
@@ -536,6 +541,7 @@ function createGuiServer(options = {}) {
           connected: status.connected,
           mode: status.mode,
           layout: status.layout,
+          edition: status.edition,
         });
         return;
       }

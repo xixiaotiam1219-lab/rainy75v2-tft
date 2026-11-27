@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import {
+  MAIN_BASELINES,
   assertValidHidDevice,
   probeDevice,
   readStockBaseline,
@@ -33,6 +34,8 @@ import {
   encodeGif320x172,
   rgbaToStaticGifSource
 } from '../web/gif-studio.mjs';
+
+import { planEdition } from '../web/easy-plan.mjs';
 
 const require = createRequire(import.meta.url);
 const { fontFixture } = require('./font-fixture.cjs');
@@ -406,7 +409,7 @@ test('font failure after successful IAP is attributed to font and retries only t
 });
 
 test('official version read correlates the response and accepts only the known checksum forms', async () => {
-  for (const code of [63, 64, 65]) for (const legacy of [false, true]) {
+  for (const code of [63, 64, 65, 71]) for (const legacy of [false, true]) {
     const info = await readStockBaseline({ exchange: async (packet, match) => {
       assert.deepEqual(Array.from(packet.subarray(0, 7)), [0xbe, 0xe4, 10, 0x44, 4, 0, 0]);
       const reply = new Uint8Array(256);
@@ -418,7 +421,7 @@ test('official version read correlates the response and accepts only the known c
       assert.equal(match(wrong), false);
       return reply;
     } });
-    assert.equal(info.baseline, code === 63 ? '0x3f' : code === 64 ? '0x40' : null);
+    assert.equal(info.baseline, code === 63 ? '0x3f' : code === 64 ? '0x40' : code === 71 ? '0x47' : null);
   }
   await assert.rejects(() => readStockBaseline({ exchange: async () => Uint8Array.of(0xbe, 0xe4, 14, 0x44, 4, 0, 0, 0, 0, 64, 0, 255, 255, 0xed) }), /校验失败/);
 });
@@ -432,6 +435,7 @@ test('all required files are checked before entering the first firmware upgrade'
     bundle: { main }, appClient: { enterIap: async () => { entered = true; } }
   });
   await assert.rejects(() => runner.start(), /缺少 FONT.BIN/);
+  await assert.rejects(() => runner.retryCurrentStep(), /缺少 FONT.BIN/);
   assert.equal(entered, false);
 });
 
@@ -703,4 +707,48 @@ test('DeploymentRunner runs Track C font/GIF uploads via validated pipeline and 
   const restoreDone = await restoreRunner.start();
   assert.equal(restoreDone.status, 'completed');
   assert.deepEqual(iapMainDev.memory, mainBundle.bytes);
+});
+
+
+test('standalone editions select the matching 0.71 image and refuse unknown or mismatched stock', async () => {
+  const main071 = await makeSyntheticMainBundle();
+  main071.manifest.stockSha256 = MAIN_BASELINES['0x47'].stockSha256;
+  const font = new Uint8Array(fontFixture());
+  const { bodyCrc } = validateFont(font);
+  const ipsBase = await makeSyntheticIpsBundle();
+  const ipsLyrics = await makeSyntheticIpsBundle({ lyrics: true, fontBodyCrc: bodyCrc });
+  const gif = new Uint8Array(require('node:fs').readFileSync(new URL('../assets/robot-pink.gif', import.meta.url)));
+  const bundle = { firmware: { main071 }, ipsBase, ipsLyrics, font, gif };
+  const stock071 = { mode: 'app', detectedBaseline: '0x47', stockVersion: [0, 0, 71, 0] };
+  for (const layout of [null, 0, 1, 2, 3, 4]) {
+    const { plan, intent, bundle: selected } = planEdition(stock071, { layout }, bundle);
+    assert.equal(selected.main, main071);
+    assert.equal(plan.baseline, '0x47');
+    assert.equal(plan.steps[0].id, 'flash_main');
+    assert.equal(intent.preferredLayout, layout ?? undefined);
+    assert.equal(plan.steps.some(step => step.id === 'flash_ips_lyrics'), layout !== null);
+    if (layout !== null) {
+      assert(plan.steps.findIndex(step => step.id === 'upload_gif') < plan.steps.findIndex(step => step.id === 'upload_font'));
+    }
+  }
+  let writes = 0;
+  const candidate = planEdition(stock071, { layout: null }, bundle);
+  const runner = new DeploymentRunner({ ...candidate, appClient: { enterIap: async () => { writes++; } } });
+  assert.equal((await runner.start()).status, 'awaiting_iap_auth');
+  assert.equal(writes, 1);
+  assert.throws(() => planEdition({ ...stock071, detectedBaseline: null }, { layout: 4 }, bundle), /未适配/);
+  assert.throws(() => planEdition({ mode: 'app' }, { layout: 4 }, bundle), /未读到/);
+  assert.throws(() => planEdition({ mode: 'iap' }, { layout: 4 }, bundle), /升级模式/);
+  assert.throws(() => planEdition(stock071, { layout: 4 }, { ...bundle, firmware: {} }), /缺少匹配/);
+  const wrong = { ...main071, manifest: { ...main071.manifest, stockSha256: MAIN_BASELINES['0x40'].stockSha256 } };
+  assert.throws(() => planEdition(stock071, { layout: 4 }, { ...bundle, firmware: { main071: wrong } }), /缺少匹配/);
+
+  const patched = { ...stock071, mainCap: MAIN_CAP, ipsCap: IPS_CAP, flashKiB: 1024, series: 13,
+    clockValid: true, lyrics: { supported: true, fontCrc: bodyCrc, fontReady: true, layout: 1, layoutCount: 2 } };
+  const action = (layout, step) => planEdition(patched, { layout }, bundle).plan.steps.find(s => s.id === step)?.action;
+  assert.equal(action(1, 'upload_font'), 'skip');
+  assert.equal(action(1, 'flash_ips_lyrics'), 'skip');
+  assert.equal(action(3, 'flash_ips_lyrics'), 'run');
+  assert.equal(action(null, 'flash_ips_base'), 'run');
+  assert.equal(action(1, 'calibrate'), 'skip');
 });

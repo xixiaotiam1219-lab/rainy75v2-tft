@@ -18,6 +18,21 @@ const RESTORE_NOTE = '基于官方输入基线生成的恢复镜像（非整片 
 const KNOWN_PIDS = new Set([APP_PID, TARGETS.main.pid, TARGETS.ips.pid]);
 const RECEIVER_PIDS = new Set([0x3070, 0x3071]);
 
+export const MAIN_BASELINES = Object.freeze({
+  '0x3f': Object.freeze({
+    version: '0.63-beta1', code: 63, patch: 'main063beta1', restore: 'restoreMain063beta1',
+    stockSha256: 'bc575a6d7b19042048705248715a43a67a23c7f217ba0ac464c539a390f4d23b'
+  }),
+  '0x40': Object.freeze({
+    version: '0.64', code: 64, patch: 'main064', restore: 'restoreMain064',
+    stockSha256: '31a9eb80752c1f8c94951dd6e2e6776eeb216f47ba58919ca36f6e6d26f0e476'
+  }),
+  '0x47': Object.freeze({
+    version: '0.71', code: 71, patch: 'main071', restore: 'restoreMain071',
+    stockSha256: 'c9ecade81300d083e3a067498e67401dd323668b76c26450ad23f758394ccbd4'
+  }),
+});
+
 function isReceiverPid(pid) {
   return RECEIVER_PIDS.has(pid);
 }
@@ -88,8 +103,8 @@ export async function readStockBaseline(io) {
   const received = reply[11] | reply[12] << 8;
   if (received !== sum16(reply.subarray(0, 11)) && received !== sum16(packet)) throw new Error('原厂版本应答校验失败');
   const raw = Array.from(reply.subarray(7, 11));
-  const version = raw.join(',');
-  return { raw, baseline: version === '0,0,64,0' ? '0x40' : version === '0,0,63,0' ? '0x3f' : null };
+  const baseline = Object.keys(MAIN_BASELINES).find(key => raw.join(',') === `0,0,${MAIN_BASELINES[key].code},0`);
+  return { raw, baseline: baseline || null };
 }
 
 async function queryLy1State(client) {
@@ -155,7 +170,7 @@ export async function probeDevice(target, options = {}) {
 
   if (target && typeof target.queryMain === 'function' && typeof target.queryIps === 'function') {
     const mainCap = await safeQuery(() => target.queryMain(9));
-    const stock = mainCap !== MAIN_CAP && target.io ? await safeQuery(() => readStockBaseline(target.io)) : null;
+    const stock = target.io ? await safeQuery(() => readStockBaseline(target.io)) : null;
     const clockValidRaw = mainCap === MAIN_CAP ? await safeQuery(() => target.queryMain(8)) : null;
     const clockGuard = mainCap === MAIN_CAP ? await safeQuery(() => target.queryMain(15)) : null;
     const ipsCap = await safeQuery(() => target.queryIps(0));
@@ -311,7 +326,7 @@ export function planDeployment(rawProbe, intent = {}, bundle = {}) {
   const warnings = [];
   const steps = [];
 
-  if (scenario !== 'restore' && probe.stockVersion && !probe.detectedBaseline) {
+  if (scenario !== 'restore' && probe.stockVersion && !probe.detectedBaseline && (probe.mainCap !== MAIN_CAP || intent.forceReflashMain)) {
     return { scenario, track, baseline, probe, blocked: true, error: '原厂主控版本尚未适配，请保留官方固件并反馈版本信息。', warnings, steps: [] };
   }
   if (probe.detectedBaseline && baseline !== probe.detectedBaseline && (scenario === 'restore' || probe.mainCap !== MAIN_CAP || intent.forceReflashMain)) {
@@ -520,7 +535,7 @@ export function planDeployment(rawProbe, intent = {}, bundle = {}) {
   let expectedLyricsFontCrc = getFontBodyCrcFromBundle(bundle, ipsLyricsEntry);
 
   if (track === 'A') {
-    const ipsIsL6 = probe.ipsCap === IPS_CAP;
+    const ipsIsL6 = probe.ipsCap === IPS_CAP && (!intent.baseOnly || !probe.lyrics.supported);
     if (ipsIsL6 && !intent.forceReflashIps && !wantThemePatch) {
       steps.push({
         id: 'flash_ips_base',
@@ -592,10 +607,13 @@ export function planDeployment(rawProbe, intent = {}, bundle = {}) {
     } else {
       const ly = probe.lyrics || {};
       const meetsTrackC = track !== 'C' || (ly.coverSupported && ly.volumeSupported && (ly.layoutCount ?? 0) >= 5);
+      const meetsLayout = intent.preferredLayout === undefined ||
+        (ly.layout !== null && ly.layout !== undefined && ly.layoutCount > intent.preferredLayout);
       const fontCrcMatches = bundleFontCrc === null || ly.fontCrc === bundleFontCrc;
       const alreadyCompatibleLyrics = Boolean(
         ly.supported &&
         meetsTrackC &&
+        meetsLayout &&
         fontCrcMatches &&
         !intent.forceReflashIps &&
         !wantThemePatch
@@ -862,6 +880,7 @@ export class DeploymentRunner {
     );
 
     this._busy = false;
+    this._preflightPassed = false;
     this._pendingFirmwarePlan = null;
     this._enteredIapForStepId = null;
     this._flashClient = null;
@@ -1023,6 +1042,13 @@ export class DeploymentRunner {
           flash_restore_main: 'restoreMain', flash_restore_ips: 'restoreIps' }[step.id];
         const entry = this.bundle[key] || (step.target === 'ips' ? this.bundle.ips : null);
         if (!entry) throw new Error(`缺少${step.title}，未进入升级模式`);
+        if (step.target === 'main') {
+          const stock = MAIN_BASELINES[this.plan.baseline];
+          const supplied = entry.manifest?.stockSha256;
+          if ((supplied || this.intent.requireKnownMain) && (!stock || supplied !== stock.stockSha256)) {
+            throw new Error('主控镜像与识别到的出厂版本不匹配，未进入升级模式');
+          }
+        }
         const build = await validateBuild(entry.bytes, entry.manifest);
         if (build.target !== step.target || build.pid !== step.pid) throw new Error('固件与目标芯片不匹配，未擦除');
       } else if (step.id === 'upload_font') {
@@ -1055,6 +1081,18 @@ export class DeploymentRunner {
         continue;
       }
       if (step.action === 'manual') {
+        if (step.id === 'manual_wob_s1_check' && this.intent.verifyS1) {
+          const app = await this._ensureAppClient();
+          let active = await safeQuery(() => app.queryIps(7));
+          for (let attempt = 0; active === 0 && attempt < 4; attempt++) {
+            await this.pause(250);
+            active = await safeQuery(() => app.queryIps(7));
+          }
+          if (active === 1) {
+            this.stepIndex++;
+            continue;
+          }
+        }
         this.manualReminders.push({ id: step.id, title: step.title, reason: step.reason });
         this._emit('manual_reminder', basePct, step.reason);
         this.stepIndex++;
@@ -1245,6 +1283,7 @@ export class DeploymentRunner {
     this.diagnostic = null;
     try {
       await this._preflight();
+      this._preflightPassed = true;
       return await this._runLoop();
     } catch (err) {
       this._fail(this.plan.steps[this.stepIndex], err);
@@ -1312,6 +1351,7 @@ export class DeploymentRunner {
     if (this.status !== 'failed') {
       throw new Error('当前不处于失败状态，无需重试');
     }
+    if (!this._preflightPassed) return this.start();
     const step = this.plan.steps[this.stepIndex];
     if (!step) {
       throw new Error('没有可重试的步骤');

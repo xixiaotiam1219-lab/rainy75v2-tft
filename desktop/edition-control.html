@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rainy75 V2 歌词设置</title>
+<style>
+  body { max-width: 38rem; margin: 2rem auto; padding: 0 1.2rem; font: 16px/1.65 system-ui, sans-serif; color: #281d25; background: #f9f6f4; }
+  h1 { margin-bottom: 0; } section { margin: 1.25rem 0; padding: 1rem; border: 1px solid #e7dce2; border-radius: 14px; background: white; }
+  button,input,select { font: inherit; } button { color: #fff; background: #83345e; border: 0; border-radius: 8px; padding: .4rem .7rem; margin-top: .5rem; cursor: pointer; }
+  label { display: block; margin: .4rem 0; } input[type=number] { width: 5.2rem; } #feedback { color: #77304e; }
+</style>
+</head>
+<body>
+<h1>歌词设置</h1>
+<p id="player" role="status">正在连接歌词后台…</p>
+<section>
+  <label for="offset">歌词提前的秒数</label>
+  <input id="offset" type="number" min="-10" max="10" step=".1" value="0">
+  <button id="save">保存</button>
+  <small>填负数可延后。</small>
+  <label for="lrc">导入当前歌曲的 LRC</label>
+  <input id="lrc" type="file" accept=".lrc,text/plain">
+  <button id="retry">重新匹配歌词</button>
+</section>
+<section id="cover" hidden>
+  <label for="size">歌词字号</label>
+  <select id="size"><option value="20">20 px</option><option value="30">30 px</option><option value="40">40 px</option></select>
+  <select id="style" aria-label="边缘风格"><option value="0">清晰</option><option value="1">柔和</option></select>
+  <button id="applyType">保存字号</button>
+</section>
+<button id="enable">开启登录自启</button>
+<button id="disable">取消登录自启</button>
+<button id="stop">退出歌词后台</button>
+<p id="feedback" role="status"></p>
+<script>
+const $ = id => document.getElementById(id);
+let stopped = false, initialized = false;
+async function post(route, body = {}) {
+  try {
+    const response = await fetch(route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!response.ok) throw new Error((await response.json()).error);
+    $('feedback').textContent = '已完成';
+    return true;
+  } catch (error) {
+    $('feedback').textContent = error.message;
+    return false;
+  }
+}
+async function refresh() {
+  if (stopped) return;
+  try {
+    const response = await fetch('/state', { cache: 'no-store' });
+    const state = await response.json();
+    if (!initialized) {
+      $('offset').value = state.settings.offsetMs / 1000;
+      $('cover').hidden = state.settings.layout !== 4;
+      $('size').value = state.settings.textSize;
+      $('style').value = state.settings.textStyle;
+      initialized = true;
+    }
+    $('player').textContent = state.connected
+      ? (state.frame?.title || '已连接键盘，等待播放歌曲')
+      : (state.error || '正在寻找 USB 有线键盘…');
+  } catch {
+    $('player').textContent = '歌词后台未运行';
+  }
+  setTimeout(refresh, 1000);
+}
+$('save').onclick = () => {
+  if ($('offset').reportValidity() && $('offset').value !== '') {
+    post('/settings', { offsetMs: Math.round(Number($('offset').value) * 1000) });
+  }
+};
+$('retry').onclick = () => post('/retry');
+$('lrc').onchange = async () => {
+  const file = $('lrc').files[0];
+  if (file && file.size <= 1024 * 1024) await post('/lrc', { text: await file.text() });
+};
+$('applyType').onclick = () => post('/type', { size: Number($('size').value), style: Number($('style').value) });
+$('enable').onclick = () => post('/startup', { enabled: true });
+$('disable').onclick = () => post('/startup', { enabled: false });
+$('stop').onclick = async () => {
+  if (await post('/stop')) {
+    stopped = true;
+    $('player').textContent = '歌词后台已退出';
+  }
+};
+refresh();
+</script>
+</body>
+</html>

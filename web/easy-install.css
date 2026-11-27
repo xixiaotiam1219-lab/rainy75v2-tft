@@ -1,0 +1,55 @@
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f9f6f4;
+  color: #281d25;
+  font: 16px/1.65 system-ui, "Microsoft YaHei UI", sans-serif;
+}
+main { width: min(100% - 36px, 970px); margin: 0 auto; padding: 36px 0 24px; }
+header { display: flex; gap: 12px; align-items: baseline; font-weight: 750; }
+header span, figcaption, footer { color: #6e5d65; font-size: .82rem; font-weight: 500; }
+.installation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, .95fr);
+  align-items: center;
+  gap: clamp(25px, 6vw, 64px);
+  min-height: 365px;
+  margin: 20px 0;
+  padding: clamp(24px, 5vw, 54px);
+  background: #fff;
+  border: 1px solid #e7dce2;
+  border-radius: 22px;
+}
+h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.45rem); line-height: 1.18; letter-spacing: -.045em; }
+p { margin: 13px 0; }
+.actions { margin-top: 23px; display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: inherit; font-weight: 700; border: 1px solid transparent; border-radius: 9px;
+  color: #fff; background: #83345e; padding: 10px 17px; cursor: pointer;
+}
+button:disabled { opacity: .65; cursor: default; }
+button.secondary { background: #f7edf3; color: #67234b; border-color: #e8d5e1; }
+:focus-visible { outline: 3px solid #ae5d92; outline-offset: 3px; }
+#status, .note { color: #69525f; font-size: .9rem; margin-bottom: 0; }
+#status:empty { display: none; }
+progress { width: 100%; height: 6px; accent-color: #83345e; margin-top: 14px; }
+#error { color: #922b46; font-size: .92rem; }
+a { color: #83345e; text-underline-offset: 3px; }
+figure { margin: 0; text-align: center; }
+figure img {
+  display: block; width: 100%; height: auto; image-rendering: pixelated;
+  border: 7px solid #302733; border-radius: 14px;
+}
+figcaption { margin-top: 8px; }
+details { border-bottom: 1px solid #e4d6de; padding: 8px 2px 14px; color: #69525f; font-size: .92rem; }
+summary { cursor: pointer; font-weight: 650; }
+pre { white-space: pre-wrap; max-height: 200px; overflow: auto; overflow-wrap: anywhere; }
+pre:empty { display: none; }
+footer { margin-top: 18px; }
+@media (max-width: 680px) {
+  main { padding-top: 20px; }
+  .installation { grid-template-columns: 1fr; }
+  figure { max-width: 360px; }
+}

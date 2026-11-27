@@ -9,5 +9,13 @@ MAIN_PROFILES={
   'stockVersion':'0.64','bytes':284492,'ipsHook':0x2467e,'ipsHandler':0x20390,'rtcHook':0x134ac,'rtcInit':0x1208c,
   'workerA':0x2000a86c,'workerB':0x2000b492,'nextA':0x2000752a,'nextB':0x200091f2,'collector':0x20007000,
   'rx':0x20016cf8,'txBuffer':0x20016d08,'gp':0x200108d0,'usbDispatcher':0x24424,'parameterGetter':0x208fc,
-  'highcodeEnd':0x2000efd4,'dataSource':0x46350,'dataEnd':0x200103d0,'bssStart':0x200103d0,'bssEnd':0x2001c92c}
+  'highcodeEnd':0x2000efd4,'dataSource':0x46350,'dataEnd':0x200103d0,'bssStart':0x200103d0,'bssEnd':0x2001c92c},
+ 'c9ecade81300d083e3a067498e67401dd323668b76c26450ad23f758394ccbd4':{
+  'stockVersion':'0.71','bytes':293008,'ipsHook':0x266a8,'ipsHandler':0x2159a,'rtcHook':0x14520,'rtcInit':0x13100,
+  'workerA':0x2000b54a,'workerB':0x2000c1e4,'nextA':0x20007894,'nextB':0x2309a,'collector':0x2000736a,
+  'collectorEntry':'83a7c12591e38280','ispProgram':0x2000030a,'journalStart':0x49f60,'imageLimit':0x4a000,
+  'rx':0x20017ebc,'txBuffer':0x20017ecc,'gp':0x20011940,'usbDispatcher':0x2643c,'parameterGetter':None,
+  'ackOffset':-0x138,'screenEnabledOffset':0x25c,'rxLengthOffset':-0x1a8,'sendPendingOffset':-0x140,
+  'uartSend':0x200072c2,'usbTick':0x20005156,'uartGateOffset':-0x68c,
+  'highcodeEnd':0x20010044,'dataSource':0x4846c,'dataEnd':0x20011468,'bssStart':0x20011470,'bssEnd':0x2001df74}
 }

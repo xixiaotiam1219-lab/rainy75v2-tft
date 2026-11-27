@@ -42,6 +42,7 @@ import {
   auditDeviceGif
 } from './gif-studio.mjs';
 import {
+  MAIN_BASELINES,
   probeDevice,
   planDeployment,
   DeploymentRunner
@@ -1604,8 +1605,7 @@ function handleExtractGifPalette() {
 
 function getPlanningBundle() {
   const release = getReleaseBundle();
-  const baseKey = state.baseline === '0x3f' ? 'main063beta1' : 'main064';
-  const restoreBaseKey = state.baseline === '0x3f' ? 'restoreMain063beta1' : 'restoreMain064';
+  const { patch: baseKey, restore: restoreBaseKey } = MAIN_BASELINES[state.baseline];
 
   const makeMetaEntry = (manual, fwKey) => {
     if (manual) return manual;
@@ -1949,7 +1949,7 @@ async function handleProbeDevice() {
       state.baseline = probed.detectedBaseline;
       $('deploy-baseline').value = state.baseline;
       $('deploy-baseline').disabled = true;
-      $('baseline-detected-note').textContent = `已自动识别：${state.baseline === '0x40' ? '官方 0.64' : '0.63-beta1'}`;
+      $('baseline-detected-note').textContent = `已自动识别：${MAIN_BASELINES[state.baseline].version}`;
     }
     if (state.scenario === 'first' && probed.ipsCap === IPS_CAP) {
       state.scenario = 'update';
@@ -1998,8 +1998,7 @@ function appendDeployLog(line) {
 async function prepareRuntimeBundle(plan) {
   const bundle = {};
   const neededIds = new Set(plan.steps.filter(s => s.action === 'run').map(s => s.id));
-  const baseKey = state.baseline === '0x3f' ? 'main063beta1' : 'main064';
-  const restoreBaseKey = state.baseline === '0x3f' ? 'restoreMain063beta1' : 'restoreMain064';
+  const { patch: baseKey, restore: restoreBaseKey } = MAIN_BASELINES[state.baseline];
 
   if (neededIds.has('flash_main')) {
     bundle.main = state.manualBundle.main || await loadBundleFirmwareEntry(baseKey, '主控固件 V7.1');

@@ -86,10 +86,16 @@ export class AppClient{
   const valid=await this.queryMain(8),hi=await this.queryMain(7),lo=await this.queryMain(6),state=await this.queryIps(4),a=await this.queryIps(5),b=await this.queryIps(6),battery=await this.queryIps(2),mode=await this.queryIps(3),key=await this.queryIps(1);
   return {mainCap,ipsCap,valid:Boolean(valid),mainSeconds:(hi*65536+lo)>>>0,screenState:state,screenTime:decodeTime((b*65536+a)>>>0),battery:battery===65535?null:battery&255,mode,key};
  }
- async calibrate({timeZone=Intl.DateTimeFormat().resolvedOptions().timeZone,rate=32000}={}){
+ async calibrate({timeZone=Intl.DateTimeFormat().resolvedOptions().timeZone,rate=32000,rateMilliHz}={}){
   if(!Number.isInteger(rate)||rate<30000||rate>40000)throw Error('无效的计时频率');
-  await this.status();await this.pause(1005-this.now()%1000);const seconds=localSeconds(this.now(),timeZone),id=++this.seq&65535,p=new Uint8Array(8),v=new DataView(p.buffer);v.setUint32(0,seconds,true);v.setUint32(4,rate,true);
-  try{await this.request(18,id,p);}catch(e){if(e.status===7)throw Error('主控校时写入校验未通过，请保留 USB 连接');throw e;}
+  if(rateMilliHz!==undefined&&(!Number.isInteger(rateMilliHz)||rateMilliHz<30000000||rateMilliHz>40000000))throw Error('无效的精确计时频率');
+  await this.status();
+  if(rateMilliHz!==undefined){
+   if(await this.queryMain(24)!==0x4346)throw Error('主控不支持精确校频');
+   if(!await this.queryMain(25))throw Error('主控校时记录空间已用完');
+  }
+  await this.pause(1005-this.now()%1000);const seconds=localSeconds(this.now(),timeZone),id=++this.seq&65535,p=new Uint8Array(8),v=new DataView(p.buffer);v.setUint32(0,seconds,true);v.setUint32(4,rateMilliHz??rate,true);
+  try{await this.request(18,id,p);}catch(e){if(e.status===7)throw Error('主控校时写入校验未通过，请保留 USB 连接');if(e.status===5&&rateMilliHz!==undefined)throw Error('主控校时记录空间已用完');throw e;}
   for(let i=0;i<35;i++){
    const s=await this.status(),now=localSeconds(this.now(),timeZone);
    if(s.valid&&s.screenState===0x402&&s.screenTime&&Math.abs(timeDifference(s.mainSeconds,now))<=2&&Math.abs(timeDifference(s.screenTime.seconds,now))<=2)return s;
