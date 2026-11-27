@@ -242,6 +242,10 @@ def render(model, desk_image, out):
     keep = Image.new("L", scene.size)
     dr = ImageDraw.Draw(keep)
     dr.polygon([(0, 147), (611, 254), (611, 266), (0, 160)], fill=255)
+    scene.alpha_composite(Image.composite(desk, Image.new("RGBA", scene.size), keep))
+    arrow_dx = -15  # 612px artwork: about eight pixels on the LCD.
+    arrow_mask = Image.new("L", scene.size)
+    dr = ImageDraw.Draw(arrow_mask)
     dr.polygon(
         [
             (75, 190),
@@ -254,7 +258,8 @@ def render(model, desk_image, out):
         ],
         fill=255,
     )
-    scene.alpha_composite(Image.composite(desk, Image.new("RGBA", scene.size), keep))
+    arrows = Image.composite(desk, Image.new("RGBA", scene.size), arrow_mask)
+    scene.alpha_composite(arrows, dest=(arrow_dx, 0))
     scene.alpha_composite(project(board))
     original = {}
     for i, (v,) in enumerate(config["hand"]):
@@ -345,11 +350,11 @@ def render(model, desk_image, out):
             81: [(116, 243), (154, 251), (131, 284), (93, 275)],
         }
         mask = Image.new("L", (612, 354))
-        ImageDraw.Draw(mask).polygon(corners[k], fill=255)
+        ImageDraw.Draw(mask).polygon([(px + arrow_dx, py) for px, py in corners[k]], fill=255)
         caps[k] = scaled(mask).point(lambda v: 255 if v >= 128 else 0)
         a, b, c, d = caps[k].getbbox()
         keys[k] = (a, b, c - 1, d - 1)
-        hands[k] = arrow_paw(round(x * 320 / 612), round(y * 172 / 354))
+        hands[k] = arrow_paw(round((x + arrow_dx) * 320 / 612), round(y * 172 / 354))
     # Encode opaque backgrounds once, deduplicating scanlines. Hand rows use outline widths from actual silhouette.
     colors = [
         "#000000",

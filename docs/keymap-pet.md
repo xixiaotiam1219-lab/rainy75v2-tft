@@ -18,4 +18,4 @@ python tools/test_keymap_pet.py --build build/bongo --preview build/bongo/previe
 
 ## 安装
 
-在本地服务器打开 web/index.html 的手动固件工具，选生成的 BIN 与 manifest。当前允许安装的白猫镜像 SHA-256 为 136d7fdce807372ca1cee7526623243d0607fedd1dd639827facd42d7d314187。保持 USB 有线连接，在 APP 模式检测 1024 KiB、系列 13 的 AT32F435，再选择 IPS 升级设备（PID 0x3078）。写入并逐段校验后，重连 APP，上传 manifest 的 petGif 到 S1，使用 GIF 播放 S1 模式。设备通过屏幕查询 OP11 / ID13 返回 0x4244。主控沿用现有支持原生按键通知和 L6 的固件。
+在本地服务器打开 web/index.html 的手动固件工具，选生成的 BIN 与 manifest。当前允许安装的白猫镜像 SHA-256 为 cfb28f99cfe00a5b1a8c96e9d04181ab89efdfaba3c10b583a129453b8feff0e。保持 USB 有线连接，在 APP 模式检测 1024 KiB、系列 13 的 AT32F435，再选择 IPS 升级设备（PID 0x3078）。写入并逐段校验后，重连 APP，上传 manifest 的 petGif 到 S1，使用 GIF 播放 S1 模式。设备通过屏幕查询 OP11 / ID13 返回 0x4246。主控沿用现有支持原生按键通知和 L6 的固件。
