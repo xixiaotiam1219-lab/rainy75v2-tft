@@ -1,6 +1,6 @@
 # Rainy75 V2 TFT 自定义固件与工具套件
 
-> **免费项目，严禁倒卖。** 请勿将本项目原包或简单改名、打包后收费转售，也不要冒充项目作者或 WOB 售卖。[简易部署脚本下载](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/v0.2.0-alpha.8) · [分发说明](docs/distribution.md)
+> **免费项目，严禁倒卖。** 请勿将本项目原包或简单改名、打包后收费转售，也不要冒充项目作者或 WOB 售卖。[简易部署脚本下载](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/v0.2.0-alpha.9) · [分发说明](docs/distribution.md)
 
 **一键安装**：挑一个 ZIP，解压后双击 `点我安装.cmd`，接好 USB，点「开始安装」。浏览器弹出设备列表时，选页面提示的设备。每种歌词样式独立下载，歌词后台固定在选中的版式。[选择安装包与使用说明](docs/easy-install.md)
 
@@ -8,13 +8,13 @@
 
 ## Bongo Cat 白猫按键版
 
-白猫在键盘小屏上随敲键拍爪，亮起对应键帽。包含 84 个键位和四枚独立方向键，日常由键盘原生通知驱动，可以关闭电脑安装页。
+白猫在键盘小屏上随敲键拍爪，亮起对应键帽。包含 84 个键位和四枚独立方向键，日常由键盘原生通知驱动，可以关闭电脑安装页。项目上游为 [ayangweb/BongoCat](https://github.com/ayangweb/BongoCat)。
 
 ![Bongo Cat 公开版原生 320×172 的屏幕模型截图](assets/bongocat.png)
 
 公开版完整 ZIP 自带匹配的主控固件、白猫屏幕固件和 S1 GIF。解压后双击「点我安装.cmd」，USB 有线连接，退出 WOBHub 和歌词后台，点「开始安装」。
 
-安装器支持原厂主控 0.63-beta1、0.64、0.71，并核对屏幕芯片为 1024 KiB、系列 13 的 AT32F435。安装会替换小屏第 1 个 GIF。[下载完整安装包](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/download/bongo-cat-v1/rainy75v2-bongocat-windows-x64.zip) · [构建与本地素材说明](docs/keymap-pet.md)
+安装器支持原厂主控 0.63-beta1、0.64、0.71，并核对屏幕芯片为 1024 KiB、系列 13 的 AT32F435。安装会替换小屏第 1 个 GIF。[下载完整安装包](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/download/v0.2.0-alpha.9/rainy75v2-bongocat-windows-x64.zip) · [构建与本地素材说明](docs/keymap-pet.md)
 
 ## 桌宠与歌词
 
@@ -37,7 +37,7 @@
 
 软件版本、原厂基线与协议能力是不同概念。`alpha.6` 是本次工作台版本；主控仍为 V7.1，歌词协议仍为 LY1，新增功能按能力查询启用。**本次新增可视化安装与定制工作台，修复字库初始化误判、重复上传和失败步骤恢复。已有兼容用户无需为了更新工作台重刷主控、屏幕或字库；改配色等操作所需写入会由安装清单说明。**
 
-> 当前版本：`0.2.0-alpha.8`（预发布版；社区实验项目，自有代码采用 [MIT License](LICENSE)）。
+> 当前版本：`0.2.0-alpha.9`（预发布版；社区实验项目，自有代码采用 [MIT License](LICENSE)）。
 
 ![三套像素界面预览](assets/preview-all.png)
 

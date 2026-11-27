@@ -1,4 +1,4 @@
-"""Package six standalone installers and matched firmware. SPDX-License-Identifier: MIT."""
+"""Package standalone installers and matched firmware. SPDX-License-Identifier: MIT."""
 import argparse
 import base64
 import gzip
@@ -188,7 +188,7 @@ def write_edition(output, frozen, firmware, font, edition, bongo=None):
         + '若要清理旧歌词字库，可在刷桌宠版前打开页面底部「删除屏内字库」。\n\n'
           '安装会替换小屏第 1 个 GIF。若小屏仍是原厂界面，暂停歌词同步后在 WOBHub 选 GIF 槽位 1，再退出 WOBHub。\n'
           '安装中断时保持 USB 供电，在原窗口点「再试这一步」。若已关闭窗口且只看到升级设备，'
-          '请按同一 Release 的固件包和恢复说明处理。\n', 'utf8')
+          '请按[固件包和恢复说明](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/v0.2.0-alpha.9)处理。\n', 'utf8')
     package_zip(directory, output / f'rainy75v2-{name}-windows-x64.zip')
 
 
@@ -243,6 +243,8 @@ def main():
     parser.add_argument('--main071', required=True, type=Path, help='0.71 patch, recovery image and model results')
     parser.add_argument('--out', required=True, type=Path, help='New output directory')
     parser.add_argument('--bongo-dir', type=Path, help='Pack just Bongo Cat from this verified build')
+    parser.add_argument('--bongo-preview', type=Path, help='Path to this build’s 320×172 idle preview PNG')
+    parser.add_argument('--all-editions', action='store_true', help='Add the six standard packages to the public Bongo Cat release')
     parser.add_argument('--local-art', action='store_true', help='Package the Mver-based build for local personal use only')
     args = parser.parse_args()
     verify_release_dir(args.public)
@@ -252,6 +254,8 @@ def main():
         raise ValueError('Packaged font does not match the lyrics image')
     if args.local_art and not args.bongo_dir:
         parser.error('--local-art requires --bongo-dir')
+    if args.all_editions and (not args.bongo_dir or args.local_art):
+        parser.error('--all-editions requires the public Bongo Cat build')
     args.out.mkdir(parents=True, exist_ok=False)
     if args.bongo_dir:
         build = args.bongo_dir
@@ -259,9 +263,9 @@ def main():
         manifest = entry['manifest']
         model = json.loads((build / 'bongo-model-validation.json').read_text('utf8'))
         expected = (
-            (0x4246, 'cfb28f99cfe00a5b1a8c96e9d04181ab89efdfaba3c10b583a129453b8feff0e',
+            (0x4247, '5d7b087f4f2e41eba3b803ef39ab4c0cb41b113b5f68ce4e8bbb24753106c940',
              '76bf75daa5044046d4416035587ff8967638a018e838d85ecb5fce931d003672') if args.local_art else
-            (0x4247, '62b8d3c4885dc924dcc26f0daa0c7a6936eb7ba9f68196ddb285b890ea07bec2',
+            (0x4248, '58d6c3d5bd6810502b7d2d9c308702327588694d80b3fd192912953ad4035b7e',
              'd336f8a0e057d5e9aa43a9b040c720c3e9a23e04668fae720710b5ed7be332a9')
         )
         identity, image_sha, gif_sha = expected
@@ -276,10 +280,11 @@ def main():
             raise ValueError('Bongo Cat GIF does not match this build')
         image_bytes(entry, 'ipsBongo')
         firmware['ipsBongo'] = entry
-        preview = build / 'preview/bongo-idle-320.png'
+        preview = (args.bongo_preview or build / 'preview/bongo-idle-320.png').resolve()
         write_edition(args.out, args.public, firmware, font, ('bongocat', 'Bongo Cat 白猫按键版', None, preview), gif)
-        return
-    write_firmware(args.out, args.public, args.main071, firmware, restore)
+        if not args.all_editions:
+            return
+    write_firmware(args.out, args.public, args.main071, {k: v for k, v in firmware.items() if k != 'ipsBongo'}, restore)
     for edition in EDITIONS:
         write_edition(args.out, args.public, firmware, font, edition)
 

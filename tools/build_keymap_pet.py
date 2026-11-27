@@ -16,7 +16,7 @@ def build(a):
     clang = fw.compiler(a)
     theme_name, theme = resolve_theme(a.theme)
     generate(a.keys, a.theme, out / "assets", out)
-    if a.public_art == bool(a.model or a.desk_image) or not a.public_art and not (a.model and a.desk_image):
+    if (a.public_art and (a.model or a.desk_image)) or (not a.public_art and not (a.model and a.desk_image)):
         raise ValueError("Choose --public-art or both --model and --desk-image")
     frame = render(a.model, a.desk_image, out)
     gif = out / "assets" / f"bongo-base-{theme_name}.gif"
@@ -33,7 +33,7 @@ def build(a):
             "-mthumb",
             "-mfloat-abi=soft",
             "-DRAINY_BONGO=1",
-            *(["-DRAINY_BONGO_ID=0x4247"] if a.public_art else []),
+            *(["-DRAINY_BONGO_ID=0x4248"] if a.public_art else []),
             "-ffreestanding",
             "-fno-builtin",
             "-Oz",
@@ -120,7 +120,7 @@ def build(a):
         "petEnabled": True,
         "petArtLicense": "MIT" if a.public_art else "User-provided Mver assets for personal use",
         "petGif": gif.relative_to(out).as_posix(),
-        "petIdentity": 0x4247 if a.public_art else 0x4246,
+        "petIdentity": 0x4248 if a.public_art else 0x4247,
     }
     (out / "rainy75v2-ips.bin").write_bytes(image)
     (out / "manifest.json").write_text(

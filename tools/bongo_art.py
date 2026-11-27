@@ -363,7 +363,7 @@ def render(model, desk_image, out):
         dr.line((x - 8, y - 1, x + 7, y + 2), fill="black", width=4)
     backgrounds = list(map(reduced, [idle, cleanleft, cleanright, blink]))
 
-    for k, x, y in [(80, 112, 212), (82, 163, 226), (79, 219, 242), (81, 126, 264)]:
+    for k, x, y in [(82, 126, 264), (81, 163, 226), (80, 219, 242), (79, 112, 212)]:
         mask = Image.new("L", (612, 354))
         ImageDraw.Draw(mask).polygon([(px + arrow_dx, py) for px, py in ARROWS[k]], fill=255)
         caps[k] = scaled(mask).point(lambda v: 255 if v >= 128 else 0)

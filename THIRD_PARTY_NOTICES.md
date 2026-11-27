@@ -63,3 +63,10 @@
 - [WCH CH585 官方 SDK](https://github.com/openwch/ch585)（兼容 `libISP585.a` 来自 commit `db889195f07b8f3f4e7bf2c55f96a35daa14bebf`）
 - [雅特力 AT32F435 产品页](https://www.arterytek.com/en/product/AT32F435.jsp)
 - [WOB 官方网页驱动](https://wobwxe.com/)
+
+
+## Bongo Cat 白猫按键版
+
+[ayangweb/BongoCat](https://github.com/ayangweb/BongoCat) 是白猫功能的上游项目，其项目许可证为 [Apache-2.0](https://github.com/ayangweb/BongoCat/blob/master/LICENSE)，署名为 ayangweb。公开固件采用本项目原创猫、爪和桌沿图层。
+
+本地可选皮肤使用独立取得的 Bongo Cat Mver 猫和爪图层，以及 ayangweb/BongoCat 的桌沿参考图。原图版权沿用原权利人的声明。项目的 [MIT License](LICENSE) 覆盖项目源码和公开版原创图层。构建说明见 [白猫按键版](docs/keymap-pet.md)。
