@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { DeploymentRunner, MAIN_BASELINES, probeDevice } from './deploy-wizard.mjs';
+import { AppClient } from './hid.mjs';
 import { planEdition } from './easy-plan.mjs';
 import { sha256 } from './protocol.mjs';
 
@@ -10,6 +11,7 @@ const local = location.hostname === '127.0.0.1';
 const lyrics = edition?.layout !== null;
 const action = $('action');
 const background = $('background');
+const removeFont = $('remove-font');
 let probe, runner, ready, busy = false;
 let primary = connect;
 let backgroundStatus = {};
@@ -38,6 +40,7 @@ function setAction(label, handler) {
 async function perform(task) {
   if (busy || !task) return;
   busy = action.disabled = background.disabled = true;
+  removeFont.disabled = true;
   $('error').hidden = true;
   try {
     await task();
@@ -45,6 +48,7 @@ async function perform(task) {
     showError(error);
   } finally {
     busy = action.disabled = background.disabled = false;
+    removeFont.disabled = Boolean(runner);
   }
 }
 
@@ -72,6 +76,41 @@ async function stopBackground() {
   await api('stop', true);
   updateBackground(await api('status'));
   say('后台已暂停。可以连接键盘。');
+}
+
+async function deleteScreenFont() {
+  if (runner) throw new Error('请先完成当前安装。');
+  if (backgroundStatus.running || backgroundStatus.unreachable) {
+    throw new Error('请先暂停歌词同步。');
+  }
+  if (!window.confirm('删除屏内字库后，屏幕将无法显示歌词。确定仅删除 FONT.BIN 吗？')) return;
+
+  let client;
+  try {
+    client = await AppClient.connect();
+    const status = await api('status');
+    updateBackground(status);
+    if (status.running || status.unreachable) throw new Error('请先暂停歌词同步。');
+
+    const list = async () => (await client.listFiles()).find(file => file.name.toUpperCase() === 'FONT.BIN');
+    if (!await list()) {
+      say('屏幕里没有字库。');
+      return;
+    }
+    const file = $('old-font').files[0];
+    say('正在核对并删除屏内字库…');
+    const options = { deleteConfirmed: true };
+    if (file) await client.deleteFont(new Uint8Array(await file.arrayBuffer()), options);
+    else await client.deleteFontByIdentity(payload.publicFontIdentity, options);
+    if (await list()) throw new Error('删除后的复查仍读到 FONT.BIN。请检查屏幕状态。');
+    $('old-font').value = '';
+    say('字库已删除。');
+  } catch (error) {
+    say('字库删除未完成。');
+    throw error;
+  } finally {
+    await client?.close().catch(() => {});
+  }
 }
 
 async function startBackground(needsS1 = false) {
@@ -169,6 +208,11 @@ function onProgress(info) {
     setAction(`连接${name}`, () => advance(() => runner.authorizeIapAndContinue()));
     return;
   }
+  if (info.phase === 'screen_boot') {
+    log(info.message);
+    say('正在等待屏幕重启…');
+    return;
+  }
   if (steps[step] && info.phase !== 'skip') say(`正在${steps[step]} · ${info.percent}%`);
 }
 
@@ -218,6 +262,8 @@ if (edition) {
     try {
       updateBackground(await api('status'));
       action.disabled = false;
+      $('maintenance').hidden = false;
+      removeFont.disabled = false;
     } catch (error) {
       showError(error);
     }
@@ -225,6 +271,7 @@ if (edition) {
 }
 
 action.addEventListener('click', () => perform(primary));
+removeFont.addEventListener('click', () => perform(deleteScreenFont));
 background.addEventListener('click', () => perform(
   backgroundStatus.running || backgroundStatus.unreachable ? stopBackground : startBackground
 ));

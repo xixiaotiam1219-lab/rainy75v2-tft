@@ -40,6 +40,7 @@ export function planEdition(probe, edition, bundle) {
   };
   const plan = planDeployment(probe, intent, selected);
   if (plan.blocked) throw new Error(plan.error);
+  if (!lyrics) plan.steps = plan.steps.filter(step => step.id !== 'upload_font');
   // Start the expected playback surface before font initialization. Keep the
   // saved font in place when it already matches the chosen image.
   const gifIndex = plan.steps.findIndex(step => step.id === 'upload_gif');

@@ -110,3 +110,16 @@ test('only idempotent display settings or queries can retry a dropped packet',as
  for(const op of [18,20,21,25,27,28,30])await assert.rejects(()=>c.request(op,11,[],undefined,{retryMs:150}),/仅允许/);
  assert.equal(sends,2);await assert.rejects(()=>c.request(23,11,[0],undefined,{retryMs:99}),/仅允许/);
 });
+
+test('screen readiness re-sends the read-only query after a dropped boot-time packet',async()=>{
+ let now=0;const packets=[];
+ const c=new AppClient({send:async packet=>packets.push(packet)},{now:()=>now,pause:async ms=>{now+=ms;}});
+ c.ack=async()=>packets.length===1?{sub:13,status:255,value:0}:{sub:13,status:0xb0,value:0x5536};
+ await c.requireScreen();
+ assert.equal(packets.length,2);
+ assert.deepEqual(packets[0],packets[1]);
+ assert.equal(packets[0][4],11);
+ assert.equal(packets[0][5],0);
+ await assert.rejects(()=>c.queryIps(7,{retryMs:300}),/仅允许/);
+ assert.equal(packets.length,2);
+});

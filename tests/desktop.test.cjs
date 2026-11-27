@@ -82,6 +82,12 @@ test('standalone font deletion is confirmed, guarded, resumes on failure, and ne
  const c=new AppClient({});c.request=async()=>assert.fail('Invalid deletion reached device');
  for(const deleteConfirmed of [false,undefined,'true'])await assert.rejects(()=>c.deleteFont(font,{deleteConfirmed}),/确认/);
  const bad=Buffer.from(font);bad[256]^=1;await assert.rejects(()=>c.deleteFont(bad,{deleteConfirmed:true}),/CRC/);
+ await assert.rejects(()=>c.deleteFontByIdentity({bodyCrc:0,bytes:0},{deleteConfirmed:true}),/校验信息/);
+ const controls=[];
+ c.request=async()=>({});
+ c.control=async op=>{controls.push(op);if(op===2)throw Error('pause acknowledgement lost');};
+ await assert.rejects(()=>c.deleteFontByIdentity({bodyCrc:crc,bytes:font.length},{deleteConfirmed:true}),/pause acknowledgement lost/);
+ assert.deepEqual(controls,[2,5]);
 });
 
 test('extended image requires a physical preflight and verifies every byte within Bank2 limits',async()=>{

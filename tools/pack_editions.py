@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 from pack_clock071 import STOCK_SHA, pack_clock_page
 from release import (
     ROOT, _gz_b64, _load_target_entry, bundle_html, sha256_bytes, sha256_file,
-    verify_release_html, verify_release_dir, write_crlf_cmd, write_release_zip,
+    verify_release_html, verify_release_dir, write_release_zip,
 )
 
 EDITIONS = (
@@ -108,6 +108,30 @@ def package_zip(directory, target):
     print(target, flush=True)
 
 
+def write_launcher(directory):
+    # Keep batch commands and referenced filenames ASCII under every cmd code page.
+    script = (
+        '@echo off\n'
+        'setlocal EnableExtensions DisableDelayedExpansion\n'
+        'set "RAINY75_DATA=%~dp0app\\data"\n'
+        'set "RAINY75_FONT=%~dp0app\\FONT.BIN"\n'
+        'if not exist "%~dp0app\\runtime\\node.exe" goto missing\n'
+        'if not exist "%~dp0app\\desktop\\gui-server.cjs" goto missing\n'
+        'if not exist "%~dp0install.html" goto missing\n'
+        'echo Opening the installer. Keep this window open until setup is complete.\n'
+        'echo If needed, copy the URL below into Chrome or Edge.\n'
+        '"%~dp0app\\runtime\\node.exe" "%~dp0app\\desktop\\gui-server.cjs" --html "%~dp0install.html" --open\n'
+        'if not errorlevel 1 exit /b 0\n'
+        'pause\n'
+        'exit /b 1\n'
+        ':missing\n'
+        'echo Installer files are missing. Extract the entire ZIP before running this file.\n'
+        'pause\n'
+        'exit /b 1\n'
+    )
+    (directory / '点我安装.cmd').write_bytes(script.replace('\n', '\r\n').encode('ascii'))
+
+
 def write_edition(output, frozen, firmware, font, edition):
     name, title, layout, preview = edition
     lyric = layout is not None
@@ -131,22 +155,14 @@ def write_edition(output, frozen, firmware, font, edition):
         gif = (frozen / '固件与素材/assets/robot-pink.gif').read_bytes()
     png = base64.b64encode((ROOT / 'assets' / preview).read_bytes()).decode('ascii')
     bundle = {'format': FORMAT, 'edition': {**settings, 'preview': 'data:image/png;base64,' + png},
-              'firmware': fw, 'gif': payload(gif)}
+              'firmware': fw, 'gif': payload(gif),
+              'publicFontIdentity': {'bodyCrc': int.from_bytes(font[36:40], 'little'), 'bytes': len(font)}}
     if lyric:
         bundle['font'] = payload(font)
     html = bundle_html(ROOT / 'web/easy-install.html', bundle)
     verify_release_html(html, require_bundle_payload=False)
-    (directory / '屏幕安装.html').write_text(html, 'utf8')
-    write_crlf_cmd(directory / '点我安装.cmd',
-        '@echo off\nsetlocal\nchcp 65001 >nul\n'
-        'set "RAINY75_DATA=%~dp0app\\data"\n'
-        'set "RAINY75_FONT=%~dp0app\\FONT.BIN"\n'
-        'if not exist "%~dp0app\\runtime\\node.exe" goto missing\n'
-        'echo 正在打开安装器。请保留此窗口，直到安装结束。\n'
-        'echo 如果默认浏览器不是 Chrome 或 Edge，请复制下方网址到 Chrome 或 Edge。\n'
-        '"%~dp0app\\runtime\\node.exe" "%~dp0app\\desktop\\gui-server.cjs" --html "%~dp0屏幕安装.html" --open\n'
-        'if not errorlevel 1 exit /b 0\npause\nexit /b 1\n'
-        ':missing\necho 请先解压整个 ZIP，再双击点我安装.cmd。\npause\nexit /b 1\n')
+    (directory / 'install.html').write_text(html, 'utf8')
+    write_launcher(directory)
     extra = ('NodeJS-LICENSE.txt',) + (('netease-elog-MIT.txt', 'node-hid-LICENSE.txt', 'Noto-OFL-1.1.txt') if lyric else ())
     notices(directory, frozen, extra)
     (directory / '使用说明.md').write_text(
@@ -157,7 +173,8 @@ def write_edition(output, frozen, firmware, font, edition):
         + ('安装结束后播放 QQ 音乐或网易云音乐。歌词需要 Windows 后台和 USB 有线连接，网页可以关闭。'
            '以后通过「启动歌词同步」直接启动，可在「歌词设置」开启登录自启。\n\n' if lyric else
            '安装后可关闭安装窗口。桌宠和按键页由键盘自行运行。\n\n')
-        + '安装会替换小屏第 1 个 GIF。若小屏仍是原厂界面，暂停歌词同步后在 WOBHub 选 GIF 槽位 1，再退出 WOBHub。\n'
+        + '若要清理旧歌词字库，可在刷桌宠版前打开页面底部「删除屏内字库」。\n\n'
+          '安装会替换小屏第 1 个 GIF。若小屏仍是原厂界面，暂停歌词同步后在 WOBHub 选 GIF 槽位 1，再退出 WOBHub。\n'
           '安装中断时保持 USB 供电，在原窗口点「再试这一步」。若已关闭窗口且只看到升级设备，'
           '请按同一 Release 的固件包和恢复说明处理。\n', 'utf8')
     package_zip(directory, output / f'rainy75v2-{name}-windows-x64.zip')

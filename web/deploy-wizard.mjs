@@ -491,6 +491,7 @@ export function planDeployment(rawProbe, intent = {}, bundle = {}) {
 
   // 1. Main controller step
   const mainIsV71 = probe.mainCap === MAIN_CAP;
+  const mainRevision = baseline === '0x47' ? 'V7.2' : 'V7.1';
   const switchedBaseline = Boolean(
     intent.baselineSwitched ||
     (intent.previousBaseline && intent.previousBaseline !== baseline)
@@ -509,7 +510,7 @@ export function planDeployment(rawProbe, intent = {}, bundle = {}) {
       target: 'main',
       pid: TARGETS.main.pid,
       action: 'skip',
-      title: '键盘主控固件 (V7.1)',
+      title: `键盘主控固件 (${mainRevision})`,
       reason
     });
   } else {
@@ -521,7 +522,7 @@ export function planDeployment(rawProbe, intent = {}, bundle = {}) {
       pid: TARGETS.main.pid,
       alreadyInIap: probe.pid === TARGETS.main.pid,
       action: 'run',
-      title: '刷入键盘主控固件 (V7.1)',
+      title: `刷入键盘主控固件 (${mainRevision})`,
       reason: intent.forceReflashMain ? '用户勾选强制重刷主控' : '主控尚未升级至 V7.1 (0x4350)'
     });
   }
@@ -821,6 +822,9 @@ export function planDeployment(rawProbe, intent = {}, bundle = {}) {
 
 function buildRecoveryHint(step, error) {
   const msg = error?.message || '';
+  if (error?.code === 'IPS_NOT_READY') {
+    return '保持 USB 有线连接，关闭 WOBHub 和歌词后台，等小屏亮起后点「再试这一步」。';
+  }
   if (step?.id === 'flash_main' || step?.id === 'flash_restore_main' || step?.target === 'main') {
     return '主控刷写中断时键盘可能停留在 IAP (0x3079)，请勿断开供电，重新选择 0x3079 恢复或参照 docs/recovery.md 处理。';
   }
@@ -881,6 +885,7 @@ export class DeploymentRunner {
 
     this._busy = false;
     this._preflightPassed = false;
+    this._screenBootPending = false;
     this._pendingFirmwarePlan = null;
     this._enteredIapForStepId = null;
     this._flashClient = null;
@@ -993,6 +998,25 @@ export class DeploymentRunner {
     }
   }
 
+  async _waitForScreenBoot(percent) {
+    this._emit('screen_boot', percent, '屏幕固件已写入并校验，正在等待屏幕重启。');
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const app = await this._ensureAppClient();
+      try {
+        await app.requireScreen();
+        this._screenBootPending = false;
+        return;
+      } catch (error) {
+        lastError = error;
+        await this._closeAppClient();
+        if (attempt < 2) await this.pause(500);
+      }
+    }
+    throw Object.assign(new Error('屏幕固件已校验，但重启后屏幕暂未应答。等小屏亮起后点「再试这一步」。',
+      { cause: lastError }), { code: 'IPS_NOT_READY' });
+  }
+
   async _prepareFirmwarePlan(step) {
     let rawEntry;
     if (step.id === 'flash_restore_main') {
@@ -1071,6 +1095,7 @@ export class DeploymentRunner {
       if (this.status === 'aborted') return this.snapshot();
       const step = this.plan.steps[this.stepIndex];
       const basePct = (this.stepIndex / Math.max(1, total)) * 100;
+      if (this._screenBootPending) await this._waitForScreenBoot(basePct);
 
       if (step.action === 'blocked' || step.action === 'needs_reflash') {
         throw new Error(step.reason || step.title);
@@ -1252,6 +1277,7 @@ export class DeploymentRunner {
           `${step.title} · ${phase} ${Math.round(p * 100)}%`
         );
       });
+      this._screenBootPending = step.id === 'flash_ips_base' || step.id === 'flash_ips_lyrics';
     } finally {
       this._flashClient = null;
       await io.close().catch(() => {});

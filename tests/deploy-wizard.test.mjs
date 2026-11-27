@@ -408,6 +408,40 @@ test('font failure after successful IAP is attributed to font and retries only t
   assert.equal(iap.stats().eraseCalls, 1);
 });
 
+test('screen reboot waits for L6 and retries assets without repeating a completed flash', async () => {
+  const ipsBase = await makeSyntheticIpsBundle();
+  const gif = makeTinyDeviceGif();
+  const app = makeAppHidDevice({ ipsCap: null });
+  const iap = makeIapHidDevice(0x3078, ipsBase.bytes.length);
+  let now = 0, uploads = 0;
+  const progress = [];
+  const runner = new DeploymentRunner({
+    plan: { track: 'A', steps: [
+      { id: 'flash_ips_base', target: 'ips', pid: 0x3078, category: 'firmware', action: 'run' },
+      { id: 'upload_gif', category: 'asset', action: 'run' }
+    ] },
+    bundle: { ipsBase, gif },
+    hid: { getDevices: async () => [app], requestDevice: async () => [iap] },
+    appClient: { enterIap: async () => {} },
+    now: () => now,
+    pause: async ms => { now += ms; },
+    onProgress: event => progress.push(event)
+  });
+  assert.equal((await runner.start()).status, 'awaiting_iap_auth');
+  await assert.rejects(() => runner.authorizeIapAndContinue(), /已校验.*暂未应答/);
+  assert.equal(runner.diagnostic.stepId, 'upload_gif');
+  assert.match(runner.diagnostic.recoveryHint, /USB 有线/);
+  assert(!progress.some(event => event.phase === 'step_start' && event.stepIndex === 1));
+  runner.appClient = {
+    requireScreen: async () => {},
+    upload: async bytes => { uploads++; assert.deepEqual(bytes, gif); },
+    close: async () => {}
+  };
+  assert.equal((await runner.retryCurrentStep()).status, 'completed');
+  assert.equal(iap.stats().eraseCalls, 1);
+  assert.equal(uploads, 1);
+});
+
 test('official version read correlates the response and accepts only the known checksum forms', async () => {
   for (const code of [63, 64, 65, 71]) for (const legacy of [false, true]) {
     const info = await readStockBaseline({ exchange: async (packet, match) => {
@@ -727,6 +761,7 @@ test('standalone editions select the matching 0.71 image and refuse unknown or m
     assert.equal(plan.steps[0].id, 'flash_main');
     assert.equal(intent.preferredLayout, layout ?? undefined);
     assert.equal(plan.steps.some(step => step.id === 'flash_ips_lyrics'), layout !== null);
+    assert.equal(plan.steps.some(step => step.id === 'upload_font'), layout !== null);
     if (layout !== null) {
       assert(plan.steps.findIndex(step => step.id === 'upload_gif') < plan.steps.findIndex(step => step.id === 'upload_font'));
     }

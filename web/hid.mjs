@@ -40,7 +40,8 @@ export class AppClient{
  }
  async request(op,id=0,payload=[],test=a=>a.status===1&&a.value===id,{pollMs=15,signal,retryMs=0}={}){
   if(!Number.isInteger(pollMs)||pollMs<2||pollMs>100)throw Error('无效查询间隔');
-  if(retryMs&&(![22,23,26,29].includes(op)||!Number.isInteger(retryMs)||retryMs<100||retryMs>1000))throw Error('仅允许显示查询或幂等界面设置重试');
+  const canResend=[22,23,26,29].includes(op)||op===11&&id===0;
+  if(retryMs&&(!canResend||!Number.isInteger(retryMs)||retryMs<100||retryMs>1000))throw Error('仅允许显示查询或幂等界面设置重试');
   const pending={op,id,startedAt:Date.now()};this.currentRequest=pending;let outcome='done';
   return this.sendAwait(command(op,id,payload),a=>{
    if(a.sub!==13)return false;if(test(a))return true;
@@ -48,7 +49,14 @@ export class AppClient{
   },8000,pollMs,{signal,retryMs}).catch(e=>{outcome=e.name==='AbortError'?'cancelled':'error';if(e.name==='AbortError')throw e;throw Object.assign(new Error('OP'+op+' / ID'+id+'：'+e.message),{status:e.status,cause:e});}).finally(()=>{const elapsedMs=Date.now()-pending.startedAt;if(elapsedMs>=200)this.lastSlowRequest={...pending,elapsedMs,outcome};if(this.currentRequest===pending)this.currentRequest=null;});
  }
  async queryMain(f){return (await this.request(15,f,[],a=>a.status===0xd0+f)).value;}
- async queryIps(f){return (await this.request(11,f,[],a=>a.status===0xb0+f)).value;}
+ async queryIps(f,options){return (await this.request(11,f,[],a=>a.status===0xb0+f,options)).value;}
+ async requireScreen(){
+  try{
+   if(await this.queryIps(0,{retryMs:300})!==IPS_CAP)throw Error('屏幕协议不匹配');
+  }catch(cause){
+   throw Object.assign(Error('未读到屏幕就绪应答，尚未开始写素材。',{cause}),{code:'IPS_NOT_READY'});
+  }
+ }
  async inspectFont({attempts=40}={}){
   await this.request(24,1,[],a=>a.status===0xa6&&a.value===0x4c59);
   const q=async f=>(await this.request(22,f,[],a=>a.status===0xc0+(f&15))).value;
@@ -111,7 +119,7 @@ export class AppClient{
   });
  }
  async upload(bytes,{replaceConfirmed=false,progress=()=>{}}={}){
-  if(!replaceConfirmed)throw Error('请先确认覆盖素材槽位 S1');validateGif(bytes);if(await this.queryIps(0)!==IPS_CAP)throw Error('屏幕协议不匹配');
+  if(!replaceConfirmed)throw Error('请先确认覆盖素材槽位 S1');validateGif(bytes);await this.requireScreen();
   const crc=crc16(bytes),begin=new Uint8Array(17);begin.set(new TextEncoder().encode('S1      GIF'));new DataView(begin.buffer).setUint32(11,bytes.length,true);new DataView(begin.buffer).setUint16(15,crc,true);
   let ok=false,started=false,failure;
   try{
@@ -129,12 +137,21 @@ export class AppClient{
   if(state!==1){const result=await query(10);throw Error(result===254?'旧字库不匹配，未移除':'字库移除失败，状态 '+result);}
  }
  async deleteFont(bytes,{deleteConfirmed=false}={}){
-  if(deleteConfirmed!==true)throw Error('请先确认仅删除屏内 FONT.BIN');const previous=validateFont(bytes);
-  await this.request(24,1,[],a=>a.status===0xa6&&a.value===0x4c59);
-  try{await this.request(22,9,[],a=>a.status===0xc9);}catch{throw Error('无法确认字库删除接口，请检查连接和歌词固件版本');}
-  let suspended=false;
-  try{await this.control(2);suspended=true;await this._removeFont(previous);return{deleted:true};}
-  finally{if(suspended)await this.control(5);}
+  if(deleteConfirmed!==true)throw Error('请先确认仅删除屏内 FONT.BIN');
+  return this.deleteFontByIdentity(validateFont(bytes),{deleteConfirmed});
+ }
+ async deleteFontByIdentity(previous,{deleteConfirmed=false}={}){
+  if(deleteConfirmed!==true)throw Error('请先确认仅删除屏内 FONT.BIN');
+  if(!Number.isInteger(previous?.bodyCrc)||previous.bodyCrc<0||previous.bodyCrc>0xffffffff||
+     !Number.isInteger(previous.bytes)||previous.bytes<256||previous.bytes>4194304)throw Error('字库校验信息无效');
+  try{
+   await this.request(24,1,[],a=>a.status===0xa6&&a.value===0x4c59);
+   await this.request(22,9,[],a=>a.status===0xc9);
+  }catch(cause){throw Error('当前屏幕固件未响应字库删除接口。切换到桌宠版前，请在支持字库管理的歌词固件上删除。',{cause});}
+  let failure;
+  try{await this.control(2);await this._removeFont(previous);return{deleted:true};}
+  catch(error){failure=error;throw error;}
+  finally{try{await this.control(5);}catch(error){if(!failure)throw error;failure.cleanupError=error.message;}}
  }
  async uploadFont(bytes,{replaceConfirmed=false,replaceExisting=false,previousFont,progress=()=>{}}={}){
   if(!replaceConfirmed)throw Error('请先确认写入或替换 FONT.BIN');const font=validateFont(bytes);

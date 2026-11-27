@@ -1,6 +1,6 @@
 {
   "name": "rainy75v2-tft",
-  "version": "0.2.0-alpha.7",
+  "version": "0.2.0-alpha.8",
   "private": true,
   "license": "MIT",
   "description": "Rainy75 V2 native TFT UI, clock, and optional cached-font lyrics player",

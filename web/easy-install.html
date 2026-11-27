@@ -35,6 +35,13 @@
     <p>升级中请保持供电。如果中断后只能选到升级设备，按压缩包里的恢复说明操作。</p>
     <pre id="log" aria-label="安装日志"></pre>
   </details>
+  <details id="maintenance" hidden>
+    <summary>删除屏内字库</summary>
+    <p>删掉字库后，屏幕将无法显示歌词。切换桌宠版前，可在仍装有歌词固件时删除。</p>
+    <label for="old-font">使用非本项目附带的字库时，选择原 FONT.BIN</label>
+    <input id="old-font" type="file" accept=".bin">
+    <button id="remove-font" class="secondary" type="button" disabled>删除字库</button>
+  </details>
   <footer>免费项目，严禁倒卖</footer>
 </main>
 <script type="module" src="./easy-install.mjs"></script>
