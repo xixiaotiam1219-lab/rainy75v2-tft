@@ -188,6 +188,8 @@ python tools/check_release.py
 
 ---
 
+[白猫逐键联动屏幕：素材准备、构建和安装](docs/keymap-pet.md)
+
 ## 许可与致谢
 
 - 仓库自有源码、文档和默认几何机器人素材按 [MIT License](LICENSE) 开源，请保留作者署名。

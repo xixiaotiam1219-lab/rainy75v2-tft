@@ -4,6 +4,7 @@
 #include "ui_assets.h"
 const RainyThemeSlot r75_theme __attribute__((section(".rodata.r75_theme"),used))=R75_THEME_INIT;
 static inline const RainyThemeSlot *theme_slot(void){const RainyThemeSlot *p=&r75_theme;__asm__("":"+r"(p));return p;}
+#include "keymap_pet.h"
 #define R(a) (*(volatile u32*)(a))
 #define LCD_BUSY R(0x20001c6c)
 extern u8 __live_bss_start__,__live_bss_end__;
@@ -91,6 +92,9 @@ void rainy_hook_cached_draw(u16 x,u16 y,u16 w,u16 h,const u8 *p){
   if(LCD_BUSY)return;
   if(!ui.active){ui.active=1;ui.key_dirty=ui.status_dirty=1;ui.time=0xfffffffeu;}
   refresh();
+#ifdef RAINY_BONGO
+  if(1)goto bongo_scene;
+#endif
   {const RainyThemeSlot *t=theme_slot();u16 fg=t->ink,bg;
   for(i=0;i<5;i++){
    r=&ui_geo[i];bg=r->role?t->bg:t->panel;
@@ -100,6 +104,10 @@ void rainy_hook_cached_draw(u16 x,u16 y,u16 w,u16 h,const u8 *p){
     at=((py-y)*w+px-x)*2;((u8*)p)[at]=(u8)color;((u8*)p)[at+1]=(u8)(color>>8);
    }
   }}
+#ifdef RAINY_BONGO
+ bongo_scene:
+#endif
+  bongo_draw((u8*)p,x,y,w,h,theme_slot(),clock_ms());
   ui.pointer=address;ui.object=current_object();ui.x=x;ui.y=y;ui.w=w;ui.h=h;
   ui.has_surface=R(ui.object+0x658)==address;ui.dirty=0;
  }
@@ -110,12 +118,13 @@ void rainy_hook_gui(void){if(!ui.active)((void(*)(void))0x0802dca9)();}
 void rainy_hook_misc(void){if(!ui.active)((void(*)(void))0x0805b031)();}
 void rainy_hook_image(void){
  u32 now=clock_ms();if(!ui.suspended)rtc_tick(now);
+ if(!ui.suspended&&bongo_tick(now))ui.dirty=1;
  if(UI_IDLE_MS&&ui.key&&(u32)(now-ui.key_at)>=UI_IDLE_MS){ui.key=0;ui.key_dirty=1;}
  if(!ui.active){((void(*)(void))0x0805b245)();return;}
  refresh();
  if(!LCD_BUSY){((void(*)(void))0x0805b245)();if(!LCD_BUSY&&ui.dirty&&surface_matches())rainy_hook_cached_draw(ui.x,ui.y,ui.w,ui.h,(const u8*)ui.pointer);}
 }
-void rainy_hook_native_key(int key,unsigned raw5,unsigned raw6){ui.modifiers=(u8)raw6;if((u16)key){ui.key=(u16)key;ui.key_at=clock_ms();ui.key_dirty=1;}((void(*)(int,unsigned,unsigned))0x0805ac73)(key,raw5,raw6);}
+void rainy_hook_native_key(int key,unsigned raw5,unsigned raw6){ui.modifiers=(u8)raw6;if((u16)key){ui.key=(u16)key;ui.key_at=clock_ms();bongo_key(ui.key_at,ui.key);ui.key_dirty=1;}((void(*)(int,unsigned,unsigned))0x0805ac73)(key,raw5,raw6);}
 void rainy_hook_native_status(unsigned battery,unsigned charge,unsigned mode){
  ui.battery=battery>100?100:(u8)battery;ui.charge=(u8)charge;ui.mode=(u8)mode;ui.known=1;ui.status_dirty=1;
  ((void(*)(unsigned,unsigned,unsigned))0x0805ae0b)(battery,charge,mode);
@@ -131,7 +140,11 @@ void rainy_hook_ips(const u8 *p,u16 n){
  if((op==2||op==5)&&n==11){if(LCD_BUSY){ack(BUSY,seq);return;}ui.suspended=op==2;ui.active=0;ui.has_surface=0;ack(DONE,seq);return;}
  if(op==12&&n==18){ack(rtc_schedule(p+8,seq,clock_ms()),seq);return;}
  if(op==11&&n==11){
-  switch(seq){case 0:v=0x5536;break;case 1:v=ui.key;break;case 2:v=ui.known?(ui.battery|(ui.charge<<8)):0xffff;break;case 3:v=ui.known?ui.mode:0xffff;break;case 4:v=rtc_state();break;case 5:v=rtc_value()&65535u;break;case 6:v=rtc_value()>>16;break;case 7:v=ui.active;break;case 8:v=ui.modifiers;break;case 14:v=*(volatile u16*)0x1ffff7e0u;break;case 15:v=*(volatile u8*)0x1ffff7f3u;break;default:ack(RANGE,seq);return;}
+  switch(seq){case 0:v=0x5536;break;case 1:v=ui.key;break;case 2:v=ui.known?(ui.battery|(ui.charge<<8)):0xffff;break;case 3:v=ui.known?ui.mode:0xffff;break;case 4:v=rtc_state();break;case 5:v=rtc_value()&65535u;break;case 6:v=rtc_value()>>16;break;case 7:v=ui.active;break;case 8:v=ui.modifiers;break;
+#ifdef RAINY_BONGO
+case 13:v=0x4245;break;
+#endif
+case 14:v=*(volatile u16*)0x1ffff7e0u;break;case 15:v=*(volatile u8*)0x1ffff7f3u;break;default:ack(RANGE,seq);return;}
   ack(0xb0+seq,(u16)v);return;
  }
  ack(FORMAT,seq);

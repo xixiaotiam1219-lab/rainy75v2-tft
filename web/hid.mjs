@@ -182,7 +182,7 @@ export class FlashClient{
  async ok(p,timeout=5000){const r=await this.io.exchange(p,()=>true,timeout,2);if(r.length<2||r[0]||r[1])throw Error('烧录应答失败：'+r[0]+','+r[1]);}
  async flash(progress=()=>{}){
   const {bytes,base,pid}=this.plan;if(!validDevice(this.io.device,pid,64))throw Error('目标错误，未擦除');
-  if(this.plan.variant==='lyrics-v1'&&!this.plan.hardwareChecked)throw Error('请先在 APP 模式读取并核对歌词版芯片信息，未擦除');
+  if(['lyrics-v1','bongo-v1'].includes(this.plan.variant)&&!this.plan.hardwareChecked)throw Error('请先在 APP 模式读取并核对歌词版芯片信息，未擦除');
   const erase=new Uint8Array(6);erase[0]=0x81;new DataView(erase.buffer).setUint32(2,base,true);
   progress('擦除',0);
   try{await this.ok(erase,20000);}catch(e){throw Error('擦除阶段：'+e.message+'；设备可能仍在升级模式，未确认擦除结果。');}await this.pause(1200);
