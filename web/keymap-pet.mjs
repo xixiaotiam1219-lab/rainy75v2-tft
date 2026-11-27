@@ -54,7 +54,7 @@ async function loadBuild() {
   const root = manifestFile.webkitRelativePath.split('/')[0];
   const fileAt = name => files.find(file => file.webkitRelativePath === root + '/' + name);
   const manifest = JSON.parse(await manifestFile.text());
-  if (manifest.variant !== 'bongo-v1' || manifest.petIdentity !== 0x4246 ||
+  if (manifest.variant !== 'bongo-v1' || manifest.petIdentity !== 0x4247 ||
       manifest.stockSha256 !== '32defab7902e57eb972a577fc6cbf3a7e57bc772d59b99f11038370412b77f41' ||
       !/^assets\/bongo-base-[a-z0-9-]+\.gif$/.test(manifest.petGif || '')) {
     throw new Error('请选择与说明匹配的白猫按键版构建。');
@@ -113,7 +113,7 @@ async function uploadAssets() {
   try {
     status('正在等屏幕应答…');
     await app.requireScreen();
-    if (await app.queryIps(13) !== 0x4246) throw new Error('屏幕未返回本版白猫固件标识，请检查安装进度。');
+    if (await app.queryIps(13) !== 0x4247) throw new Error('屏幕未返回本版白猫固件标识，请检查安装进度。');
     await app.upload(contents.gif, {
       replaceConfirmed: true,
       progress: ratio => {

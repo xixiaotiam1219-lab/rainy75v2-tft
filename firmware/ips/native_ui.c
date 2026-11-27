@@ -142,7 +142,7 @@ void rainy_hook_ips(const u8 *p,u16 n){
  if(op==11&&n==11){
   switch(seq){case 0:v=0x5536;break;case 1:v=ui.key;break;case 2:v=ui.known?(ui.battery|(ui.charge<<8)):0xffff;break;case 3:v=ui.known?ui.mode:0xffff;break;case 4:v=rtc_state();break;case 5:v=rtc_value()&65535u;break;case 6:v=rtc_value()>>16;break;case 7:v=ui.active;break;case 8:v=ui.modifiers;break;
 #ifdef RAINY_BONGO
-case 13:v=0x4246;break;
+case 13:v=0x4247;break;
 #endif
 case 14:v=*(volatile u16*)0x1ffff7e0u;break;case 15:v=*(volatile u8*)0x1ffff7f3u;break;default:ack(RANGE,seq);return;}
   ack(0xb0+seq,(u16)v);return;

@@ -136,6 +136,12 @@ def run(folder, preview=None):
             "misplaced highlight",
             key,
         )
+        # Independent LCD-space bounds from the original cat-facing artwork.
+        arrow_caps = {82: (41, 118, 72, 137), 81: (63, 102, 92, 116),
+                      80: (91, 107, 123, 125), 79: (37, 95, 65, 109)}
+        if key in arrow_caps:
+            left, top, right, bottom = arrow_caps[key]
+            assert all(left <= x <= right and top <= y <= bottom for x, y in marked), key
         assert marked, ("invisible highlight", key)
         if key in [4, 29, 58, 59, 69, 79, 80, 81, 82, 75]:
             samples[key] = frame

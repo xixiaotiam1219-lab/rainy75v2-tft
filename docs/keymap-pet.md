@@ -21,9 +21,9 @@ python tools/test_keymap_pet.py --build build/bongo --preview build/bongo/previe
 1. 准备已装兼容主控和普通屏幕固件的 Rainy75 V2。原厂设备可以先装[桌宠与按键版](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/v0.2.0-alpha.8)。
 2. 下载[独立的 Bongo Cat 构建与安装 ZIP](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/bongo-cat-v1)。用 Chrome 或 Edge 打开「安装白猫.html」，选择构建输出目录 `build/bongo`。如果浏览器限制直接打开本地文件，在解压目录运行 `python -m http.server 8765 --bind 127.0.0.1`，再通过浏览器打开 `http://127.0.0.1:8765` 并选择安装页。
 3. USB 有线连接，退出 WOBHub 和歌词后台。点「开始安装」，选正常键盘。安装页会检查 1024 KiB、系列 13 的 AT32F435，提示选择屏幕升级设备（`0x3078`），写入并校验固件。
-4. 等键盘重新出现，点「连接键盘并写入素材」。安装页会核对屏幕标识 `0x4246`，再传配套 GIF。若小屏仍显示原厂界面，可在 WOBHub 选择 GIF 槽位 1。
+4. 等键盘重新出现，点「连接键盘并写入素材」。安装页会核对屏幕标识 `0x4247`，再传配套 GIF。若小屏仍显示原厂界面，可在 WOBHub 选择 GIF 槽位 1。
 
-安装页接受本版已核对的屏幕镜像 SHA-256 `cfb28f99cfe00a5b1a8c96e9d04181ab89efdfaba3c10b583a129453b8feff0e` 及配套 GIF。遇到不匹配时检查模型素材、编译器、依赖版本与构建参数。
+安装页接受本版已核对的屏幕镜像 SHA-256 `5d7b087f4f2e41eba3b803ef39ab4c0cb41b113b5f68ce4e8bbb24753106c940` 及配套 GIF。遇到不匹配时检查模型素材、编译器、依赖版本与构建参数。
 
 安装写入屏幕应用区及 S1 素材槽。要切回其他界面，请安装相应的普通屏幕套件或歌词套件。若写入中断且原页面已关闭，请通过[恢复指南](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/blob/main/docs/recovery.md)恢复普通屏幕固件，再在正常模式检验屏幕芯片。
 

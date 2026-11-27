@@ -342,15 +342,17 @@ def render(model, desk_image, out):
         d.line(poly, width=2, fill="black", joint="curve")
         return im
 
-    for k, x, y in [(80, 112, 212), (82, 163, 226), (79, 219, 242), (81, 126, 264)]:
-        corners = {
-            80: [(107, 196), (140, 201), (122, 226), (84, 218)],
-            82: [(158, 209), (192, 215), (171, 241), (135, 233)],
-            79: [(212, 220), (251, 229), (228, 258), (188, 248)],
-            81: [(116, 243), (154, 251), (131, 284), (93, 275)],
-        }
+    # Match the cat-facing UpArrow/DownArrow/LeftArrow/RightArrow layers.
+    # Coordinates are in viewer space; HID usages are in the player's space.
+    arrows = [
+        (82, (126, 264), [(116, 243), (154, 251), (131, 284), (93, 275)]),
+        (81, (163, 226), [(158, 209), (192, 215), (171, 241), (135, 233)]),
+        (80, (219, 242), [(212, 220), (251, 229), (228, 258), (188, 248)]),
+        (79, (112, 212), [(107, 196), (140, 201), (122, 226), (84, 218)]),
+    ]
+    for k, (x, y), corners in arrows:
         mask = Image.new("L", (612, 354))
-        ImageDraw.Draw(mask).polygon([(px + arrow_dx, py) for px, py in corners[k]], fill=255)
+        ImageDraw.Draw(mask).polygon([(px + arrow_dx, py) for px, py in corners], fill=255)
         caps[k] = scaled(mask).point(lambda v: 255 if v >= 128 else 0)
         a, b, c, d = caps[k].getbbox()
         keys[k] = (a, b, c - 1, d - 1)

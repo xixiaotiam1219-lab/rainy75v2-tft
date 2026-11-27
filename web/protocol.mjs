@@ -25,7 +25,7 @@ export async function sha256(bytes){return Array.from(new Uint8Array(await crypt
 export const TARGETS={main:{pid:0x3079,base:0x2000,bytes:294912,boot:[0xbe,0xfc,4,0xed]},ips:{pid:0x3078,base:0x4000,bytes:507904,boot:[0xbe,0xfc,5,0,0xed]}};
 export async function validateBuild(bytes,m){
  const t=TARGETS[m?.target],lyrics=m?.target==='ips'&&m.variant==='lyrics-v1';
- const pet=m?.target==='ips'&&m.variant==='bongo-v1'&&m.pet==='bongocat-keymap'&&m.petEnabled===true&&m.sha256==='cfb28f99cfe00a5b1a8c96e9d04181ab89efdfaba3c10b583a129453b8feff0e';
+ const pet=m?.target==='ips'&&m.variant==='bongo-v1'&&m.pet==='bongocat-keymap'&&m.petEnabled===true&&m.sha256==='5d7b087f4f2e41eba3b803ef39ab4c0cb41b113b5f68ce4e8bbb24753106c940';
  const bank2=lyrics||pet;
  if(bank2&&(m.requiredFlashKiB!==1024||m.requiredSeries!==13||m.codeStart!==0x08080000||m.imageEnd!==0x08088000||m.iapEraseEnd!==0x080c0000))throw Error('Bank2 硬件与地址边界不匹配');
  if(!t||m.format!=='rainy75v2-tft/build-v1'||m.applicationBase!==t.base||m.iapPid!==t.pid||bytes.length!==m.bytes||bytes.length!==(bank2?540672:t.bytes)||m.variant&&!bank2)throw Error('构建清单或目标不匹配');

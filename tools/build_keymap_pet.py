@@ -117,7 +117,7 @@ def build(a):
         "petEnabled": True,
         "petArtLicense": "User-provided Mver assets for personal use",
         "petGif": gif.relative_to(out).as_posix(),
-        "petIdentity": 0x4246,
+        "petIdentity": 0x4247,
     }
     (out / "rainy75v2-ips.bin").write_bytes(image)
     (out / "manifest.json").write_text(
