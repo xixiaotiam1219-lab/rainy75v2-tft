@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bongo Cat · Rainy75 V2</title>
+<link rel="stylesheet" href="./easy-install.css">
+<style>.installation{grid-template-columns:1fr;min-height:0;max-width:670px}label{display:block;font-weight:650;margin:1rem 0 .3rem}</style>
+</head>
+<body>
+<main>
+<header>Rainy75 V2 <span>白猫按键版</span></header>
+<section class="installation" aria-labelledby="title">
+<div>
+<h1 id="title">Bongo Cat</h1>
+<p>用 USB 连接键盘，切到有线模式，退出 WOBHub 和歌词后台。</p>
+<label for="build">选择本地 Bongo Cat 构建文件夹</label>
+<input id="build" type="file" webkitdirectory multiple>
+<p class="note">安装会写入屏幕固件，并替换 GIF 槽位 1。</p>
+<div class="actions"><button id="action" type="button" disabled>开始安装</button></div>
+<p id="status" role="status"></p>
+<progress id="progress" value="0" max="1" aria-label="安装进度" hidden></progress>
+<p id="error" role="alert" hidden></p>
+</div>
+</section>
+<details>
+<summary>连接和恢复</summary>
+<p>请使用 Chrome 或 Edge。需要主控支持原生按键通知，屏幕芯片为 1024 KiB AT32F435（系列 13）。</p>
+<p>如果写入中断，请保留 USB 供电及当前页面，再连接屏幕升级设备。若原页面已关闭，请按说明恢复普通屏幕固件，再重新检查芯片。</p>
+</details>
+<footer>免费项目，严禁倒卖</footer>
+</main>
+<script type="module" src="./keymap-pet.mjs"></script>
+</body>
+</html>
