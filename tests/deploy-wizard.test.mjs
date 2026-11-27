@@ -755,7 +755,7 @@ test('standalone editions select the matching 0.71 image and refuse unknown or m
   const bundle = { firmware: { main071 }, ipsBase, ipsLyrics, font, gif };
   const stock071 = { mode: 'app', detectedBaseline: '0x47', stockVersion: [0, 0, 71, 0] };
   for (const layout of [null, 0, 1, 2, 3, 4]) {
-    const { plan, intent, bundle: selected } = planEdition(stock071, { layout }, bundle);
+    const { plan, intent, bundle: selected } = await planEdition(stock071, { layout }, bundle);
     assert.equal(selected.main, main071);
     assert.equal(plan.baseline, '0x47');
     assert.equal(plan.steps[0].id, 'flash_main');
@@ -767,23 +767,23 @@ test('standalone editions select the matching 0.71 image and refuse unknown or m
     }
   }
   let writes = 0;
-  const candidate = planEdition(stock071, { layout: null }, bundle);
+  const candidate = await planEdition(stock071, { layout: null }, bundle);
   const runner = new DeploymentRunner({ ...candidate, appClient: { enterIap: async () => { writes++; } } });
   assert.equal((await runner.start()).status, 'awaiting_iap_auth');
   assert.equal(writes, 1);
-  assert.throws(() => planEdition({ ...stock071, detectedBaseline: null }, { layout: 4 }, bundle), /未适配/);
-  assert.throws(() => planEdition({ mode: 'app' }, { layout: 4 }, bundle), /未读到/);
-  assert.throws(() => planEdition({ mode: 'iap' }, { layout: 4 }, bundle), /升级模式/);
-  assert.throws(() => planEdition(stock071, { layout: 4 }, { ...bundle, firmware: {} }), /缺少匹配/);
+  await assert.rejects(() => planEdition({ ...stock071, detectedBaseline: null }, { layout: 4 }, bundle), /未适配/);
+  await assert.rejects(() => planEdition({ mode: 'app' }, { layout: 4 }, bundle), /未读到/);
+  await assert.rejects(() => planEdition({ mode: 'iap' }, { layout: 4 }, bundle), /升级模式/);
+  await assert.rejects(() => planEdition(stock071, { layout: 4 }, { ...bundle, firmware: {} }), /缺少匹配/);
   const wrong = { ...main071, manifest: { ...main071.manifest, stockSha256: MAIN_BASELINES['0x40'].stockSha256 } };
-  assert.throws(() => planEdition(stock071, { layout: 4 }, { ...bundle, firmware: { main071: wrong } }), /缺少匹配/);
+  await assert.rejects(() => planEdition(stock071, { layout: 4 }, { ...bundle, firmware: { main071: wrong } }), /缺少匹配/);
 
   const patched = { ...stock071, mainCap: MAIN_CAP, ipsCap: IPS_CAP, flashKiB: 1024, series: 13,
     clockValid: true, lyrics: { supported: true, fontCrc: bodyCrc, fontReady: true, layout: 1, layoutCount: 2 } };
-  const action = (layout, step) => planEdition(patched, { layout }, bundle).plan.steps.find(s => s.id === step)?.action;
-  assert.equal(action(1, 'upload_font'), 'skip');
-  assert.equal(action(1, 'flash_ips_lyrics'), 'skip');
-  assert.equal(action(3, 'flash_ips_lyrics'), 'run');
-  assert.equal(action(null, 'flash_ips_base'), 'run');
-  assert.equal(action(1, 'calibrate'), 'skip');
+  const action = async (layout, step) => (await planEdition(patched, { layout }, bundle)).plan.steps.find(s => s.id === step)?.action;
+  assert.equal(await action(1, 'upload_font'), 'skip');
+  assert.equal(await action(1, 'flash_ips_lyrics'), 'skip');
+  assert.equal(await action(3, 'flash_ips_lyrics'), 'run');
+  assert.equal(await action(null, 'flash_ips_base'), 'run');
+  assert.equal(await action(1, 'calibrate'), 'skip');
 });

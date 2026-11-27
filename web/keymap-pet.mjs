@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { AppClient, FlashClient } from './hid.mjs';
-import { sha256, validateBuild } from './protocol.mjs';
+import { BONGO_BUILDS, sha256, validateBuild } from './protocol.mjs';
 import { auditDeviceGif } from './gif-studio.mjs';
 
 const $ = id => document.getElementById(id);
@@ -54,7 +54,7 @@ async function loadBuild() {
   const root = manifestFile.webkitRelativePath.split('/')[0];
   const fileAt = name => files.find(file => file.webkitRelativePath === root + '/' + name);
   const manifest = JSON.parse(await manifestFile.text());
-  if (manifest.variant !== 'bongo-v1' || manifest.petIdentity !== 0x4246 ||
+  if (manifest.variant !== 'bongo-v1' || !BONGO_BUILDS[manifest.petIdentity] ||
       manifest.stockSha256 !== '32defab7902e57eb972a577fc6cbf3a7e57bc772d59b99f11038370412b77f41' ||
       !/^assets\/bongo-base-[a-z0-9-]+\.gif$/.test(manifest.petGif || '')) {
     throw new Error('请选择与说明匹配的白猫按键版构建。');
@@ -66,11 +66,11 @@ async function loadBuild() {
     image.arrayBuffer().then(bytes => validateBuild(new Uint8Array(bytes), manifest)),
     gifFile.arrayBuffer().then(bytes => new Uint8Array(bytes))
   ]);
-  if (await sha256(gif) !== '76bf75daa5044046d4416035587ff8967638a018e838d85ecb5fce931d003672') {
+  if (await sha256(gif) !== BONGO_BUILDS[manifest.petIdentity].gif) {
     throw new Error('GIF 与本版固件的配套素材不一致。请选择同一次构建生成的文件夹。');
   }
   auditDeviceGif(gif, manifest.themeColors);
-  contents = { plan, gif };
+  contents = { plan, gif, petIdentity: manifest.petIdentity };
   stage = 'setup';
   status('已核对固件与素材。可以开始安装。');
 }
@@ -113,7 +113,7 @@ async function uploadAssets() {
   try {
     status('正在等屏幕应答…');
     await app.requireScreen();
-    if (await app.queryIps(13) !== 0x4246) throw new Error('屏幕未返回本版白猫固件标识，请检查安装进度。');
+    if (await app.queryIps(13) !== contents.petIdentity) throw new Error('屏幕未返回本版白猫固件标识，请检查安装进度。');
     await app.upload(contents.gif, {
       replaceConfirmed: true,
       progress: ratio => {

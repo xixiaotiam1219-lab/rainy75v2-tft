@@ -8,13 +8,13 @@
 
 ## Bongo Cat 白猫按键版
 
-白猫在键盘小屏上随敲键拍爪，亮起对应键帽。包含 84 个键位和四枚独立方向键，日常由键盘原生通知驱动，可以关闭电脑安装页。该版本有自己的构建与安装 ZIP。
+白猫在键盘小屏上随敲键拍爪，亮起对应键帽。包含 84 个键位和四枚独立方向键，日常由键盘原生通知驱动，可以关闭电脑安装页。
 
-1. 按说明准备本机素材和原厂 IPS 镜像，生成白猫固件与配套 GIF。
-2. 用 Chrome 或 Edge 打开 ZIP 里的「安装白猫.html」，选择刚生成的构建文件夹。
-3. USB 有线连接键盘，退出 WOBHub 和歌词后台，点「开始安装」。按提示连接升级设备，校验通过后重连键盘写入 GIF。
+![Bongo Cat 公开版原生 320×172 的屏幕模型截图](assets/bongocat.png)
 
-适用于已装兼容主控和基础屏幕固件的 Rainy75 V2，需要 1024 KiB、系列 13 的 AT32F435。切换白猫版时会替换小屏第 1 个 GIF。[下载 Bongo Cat 独立套件](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/tag/bongo-cat-v1) · [构建、安装与本机预览](docs/keymap-pet.md)
+公开版完整 ZIP 自带匹配的主控固件、白猫屏幕固件和 S1 GIF。解压后双击「点我安装.cmd」，USB 有线连接，退出 WOBHub 和歌词后台，点「开始安装」。
+
+安装器支持原厂主控 0.63-beta1、0.64、0.71，并核对屏幕芯片为 1024 KiB、系列 13 的 AT32F435。安装会替换小屏第 1 个 GIF。[下载完整安装包](https://github.com/xixiaotiam1219-lab/rainy75v2-tft/releases/download/bongo-cat-v1/rainy75v2-bongocat-windows-x64.zip) · [构建与本地素材说明](docs/keymap-pet.md)
 
 ## 桌宠与歌词
 

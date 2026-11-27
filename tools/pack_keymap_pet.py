@@ -11,7 +11,7 @@ SOURCE = (
     'profiles/font.json', 'profiles/keys.json', 'profiles/themes.json',
     'firmware/ips/native_ui.c', 'firmware/ips/native_ui.h', 'firmware/ips/rtc.c',
     'firmware/ips/keymap_pet.h', 'firmware/ips-lyrics/linker.ld',
-    'tools/build_keymap_pet.py', 'tools/test_keymap_pet.py', 'tools/bongo_art.py',
+    'tools/build_keymap_pet.py', 'tools/test_keymap_pet.py', 'tools/bongo_art.py', 'tools/original_cat_art.py',
     'tools/assets.py', 'tools/build.py', 'tools/extract_stock.py', 'tools/main_profiles.py',
 )
 INSTALLER = '安装白猫.html'

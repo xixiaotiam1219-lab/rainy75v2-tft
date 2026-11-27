@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-import { MAIN_CAP, IPS_CAP } from './protocol.mjs';
+import { BONGO_BUILDS, MAIN_CAP, IPS_CAP, TARGETS, sha256 } from './protocol.mjs';
 import { MAIN_BASELINES, planDeployment } from './deploy-wizard.mjs';
 import { auditDeviceGif } from './gif-studio.mjs';
 import { validateFont } from './font.mjs';
 
-export function planEdition(probe, edition, bundle) {
+export async function planEdition(probe, edition, bundle) {
   if (probe.mode !== 'app') throw new Error('键盘处于升级模式。请先按恢复说明处理，再安装。');
   const baseline = MAIN_BASELINES[probe.detectedBaseline];
   if (probe.mainCap !== MAIN_CAP && !baseline) {
@@ -15,11 +15,17 @@ export function planEdition(probe, edition, bundle) {
   }
 
   const lyrics = edition.layout !== null;
+  const bongo = edition.id === 'bongocat';
+  if (bongo && (probe.flashKiB != null && probe.flashKiB !== 1024 || probe.series != null && probe.series !== 13)) {
+    throw new Error('白猫版需要 1024 KiB、系列 13 的 AT32F435。');
+  }
   const selected = { ...bundle, main: bundle.firmware[baseline?.patch] };
   if (probe.mainCap !== MAIN_CAP && selected.main?.manifest?.stockSha256 !== baseline.stockSha256) {
     throw new Error('安装包缺少匹配的主控固件，请重新下载。');
   }
-  const theme = (lyrics ? selected.ipsLyrics : selected.ipsBase).manifest.themeColors;
+  const petIdentity = selected.ipsBongo?.manifest?.petIdentity;
+  if (bongo && await sha256(selected.gif) !== BONGO_BUILDS[petIdentity]?.gif) throw new Error('白猫固件与配套 GIF 不匹配。');
+  const theme = (bongo ? selected.ipsBongo : lyrics ? selected.ipsLyrics : selected.ipsBase).manifest.themeColors;
   auditDeviceGif(selected.gif, theme);
   if (lyrics) {
     const { bodyCrc } = validateFont(selected.font);
@@ -32,7 +38,7 @@ export function planEdition(probe, edition, bundle) {
     scenario: probe.ipsCap === IPS_CAP ? 'update' : 'first',
     track: lyrics ? (edition.layout === 4 ? 'C' : 'B') : 'A',
     preferredLayout: lyrics ? edition.layout : undefined,
-    baseOnly: !lyrics,
+    baseOnly: !lyrics && !bongo,
     requireKnownMain: true,
     customGifBytes: selected.gif,
     skipCalibrate: true,
@@ -41,6 +47,14 @@ export function planEdition(probe, edition, bundle) {
   const plan = planDeployment(probe, intent, selected);
   if (plan.blocked) throw new Error(plan.error);
   if (!lyrics) plan.steps = plan.steps.filter(step => step.id !== 'upload_font');
+  if (bongo && probe.petIdentity !== petIdentity) {
+    const base = plan.steps.findIndex(step => step.id === 'flash_ips_base');
+    plan.steps.splice(base + 1, 0,
+      { id: 'probe_lyrics_hardware', category: 'guard', action: 'run', title: '核对屏幕芯片' },
+      { id: 'flash_ips_bongo', category: 'firmware', action: 'run', target: 'ips', pid: TARGETS.ips.pid,
+        title: '写入 Bongo Cat 屏幕固件', petIdentity });
+    plan.steps.find(step => step.id === 'manual_wob_s1_check').action = 'manual';
+  }
   // Start the expected playback surface before font initialization. Keep the
   // saved font in place when it already matches the chosen image.
   const gifIndex = plan.steps.findIndex(step => step.id === 'upload_gif');

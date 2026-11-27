@@ -885,7 +885,7 @@ export class DeploymentRunner {
 
     this._busy = false;
     this._preflightPassed = false;
-    this._screenBootPending = false;
+    this._screenBootPending = null;
     this._pendingFirmwarePlan = null;
     this._enteredIapForStepId = null;
     this._flashClient = null;
@@ -1005,7 +1005,9 @@ export class DeploymentRunner {
       const app = await this._ensureAppClient();
       try {
         await app.requireScreen();
-        this._screenBootPending = false;
+        const pet = this._screenBootPending.petIdentity;
+        if (pet && await app.queryIps(13) !== pet) throw new Error('屏幕未返回匹配的 Bongo Cat 固件标识');
+        this._screenBootPending = null;
         return;
       } catch (error) {
         lastError = error;
@@ -1029,6 +1031,8 @@ export class DeploymentRunner {
       rawEntry = this.bundle.ipsBase || this.bundle.ips;
     } else if (step.id === 'flash_ips_lyrics') {
       rawEntry = this.bundle.ipsLyrics || this.bundle.ips;
+    } else if (step.id === 'flash_ips_bongo') {
+      rawEntry = this.bundle.ipsBongo;
     }
     resolveBundleEntry(rawEntry, step.title);
     let bytes = rawEntry.bytes;
@@ -1049,9 +1053,9 @@ export class DeploymentRunner {
     if (flashPlan.target !== step.target || flashPlan.pid !== step.pid) {
       throw new Error('固件与本步骤目标芯片不匹配，未擦除');
     }
-    if (flashPlan.variant === 'lyrics-v1') {
+    if (['lyrics-v1', 'bongo-v1'].includes(flashPlan.variant)) {
       if (!this.hardwareVerified && !step.hardwareChecked) {
-        throw new Error('请先在正常模式核对 1024KiB / 系列 13 芯片，再烧录歌词版 IPS');
+        throw new Error('请先在正常模式核对 1024KiB / 系列 13 芯片，再烧录扩展版 IPS');
       }
       flashPlan.hardwareChecked = true;
     }
@@ -1063,7 +1067,7 @@ export class DeploymentRunner {
     for (const step of this.plan.steps.filter(s => s.action === 'run')) {
       if (step.category === 'firmware') {
         const key = { flash_main: 'main', flash_ips_base: 'ipsBase', flash_ips_lyrics: 'ipsLyrics',
-          flash_restore_main: 'restoreMain', flash_restore_ips: 'restoreIps' }[step.id];
+          flash_ips_bongo: 'ipsBongo', flash_restore_main: 'restoreMain', flash_restore_ips: 'restoreIps' }[step.id];
         const entry = this.bundle[key] || (step.target === 'ips' ? this.bundle.ips : null);
         if (!entry) throw new Error(`缺少${step.title}，未进入升级模式`);
         if (step.target === 'main') {
@@ -1075,6 +1079,7 @@ export class DeploymentRunner {
         }
         const build = await validateBuild(entry.bytes, entry.manifest);
         if (build.target !== step.target || build.pid !== step.pid) throw new Error('固件与目标芯片不匹配，未擦除');
+        if (step.id === 'flash_ips_bongo' && build.variant !== 'bongo-v1') throw new Error('白猫固件类型不匹配，未擦除');
       } else if (step.id === 'upload_font') {
         if (!(this.bundle.font instanceof Uint8Array)) throw new Error('缺少 FONT.BIN，未进入升级模式');
         validateFont(this.bundle.font);
@@ -1132,7 +1137,7 @@ export class DeploymentRunner {
 
         if (!step.alreadyInIap && this._enteredIapForStepId !== step.id) {
           const app = await this._ensureAppClient();
-          if (flashPlan.variant === 'lyrics-v1' && !this.hardwareVerified) {
+          if (['lyrics-v1', 'bongo-v1'].includes(flashPlan.variant) && !this.hardwareVerified) {
             await app.probeLyricsTarget();
             this.hardwareVerified = true;
             flashPlan.hardwareChecked = true;
@@ -1277,7 +1282,9 @@ export class DeploymentRunner {
           `${step.title} · ${phase} ${Math.round(p * 100)}%`
         );
       });
-      this._screenBootPending = step.id === 'flash_ips_base' || step.id === 'flash_ips_lyrics';
+      this._screenBootPending = ['flash_ips_base', 'flash_ips_lyrics', 'flash_ips_bongo'].includes(step.id)
+        ? { petIdentity: step.petIdentity }
+        : null;
     } finally {
       this._flashClient = null;
       await io.close().catch(() => {});

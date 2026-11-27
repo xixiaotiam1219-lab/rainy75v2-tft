@@ -2,13 +2,14 @@
 import { DeploymentRunner, MAIN_BASELINES, probeDevice } from './deploy-wizard.mjs';
 import { AppClient } from './hid.mjs';
 import { planEdition } from './easy-plan.mjs';
-import { sha256 } from './protocol.mjs';
+import { IPS_CAP, sha256 } from './protocol.mjs';
 
 const $ = id => document.getElementById(id);
 const payload = globalThis.__RAINY75_RELEASE_BUNDLE__;
 const edition = payload?.edition;
 const local = location.hostname === '127.0.0.1';
 const lyrics = edition?.layout !== null;
+const bongo = edition?.id === 'bongocat';
 const action = $('action');
 const background = $('background');
 const removeFont = $('remove-font');
@@ -146,14 +147,15 @@ async function loadBundle(baseline) {
     const entry = payload.firmware[key];
     return entry ? { bytes: await unpack(entry), manifest: entry.manifest } : undefined;
   };
-  const [main, ipsBase, ipsLyrics, gif, font] = await Promise.all([
+  const [main, ipsBase, ipsLyrics, ipsBongo, gif, font] = await Promise.all([
     baseline ? image(baseline.patch) : undefined,
     image('ipsBase'),
     lyrics ? image('ipsLyrics') : undefined,
+    bongo ? image('ipsBongo') : undefined,
     unpack(payload.gif),
     lyrics ? unpack(payload.font) : undefined,
   ]);
-  return { firmware: baseline ? { [baseline.patch]: main } : {}, ipsBase, ipsLyrics, gif, font };
+  return { firmware: baseline ? { [baseline.patch]: main } : {}, ipsBase, ipsLyrics, ipsBongo, gif, font };
 }
 
 async function connect() {
@@ -169,7 +171,10 @@ async function connect() {
     const baseline = MAIN_BASELINES[probe.detectedBaseline];
     log(`设备模式 ${probe.mode}，主控 ${baseline?.version || probe.stockVersion?.join('.') || '未读取到版本'}`);
     const bundle = await loadBundle(baseline);
-    ready = planEdition(probe, edition, bundle);
+    if (bongo && probe.ipsCap === IPS_CAP) {
+      probe.petIdentity = await probe.client.queryIps(13).catch(() => null);
+    }
+    ready = await planEdition(probe, edition, bundle);
     say(baseline ? `已连接。识别到主控 ${baseline.version}。` : '已连接。可以开始安装。');
     await install();
   } catch (error) {
@@ -186,6 +191,7 @@ const steps = {
   flash_ips_base: '更新屏幕',
   probe_lyrics_hardware: '检查屏幕型号',
   flash_ips_lyrics: '安装播放器',
+  flash_ips_bongo: '安装 Bongo Cat',
   upload_gif: '安装屏幕素材',
   upload_font: '安装字库',
   verify_font: '检查字库',

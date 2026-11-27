@@ -16,6 +16,8 @@ def build(a):
     clang = fw.compiler(a)
     theme_name, theme = resolve_theme(a.theme)
     generate(a.keys, a.theme, out / "assets", out)
+    if a.public_art == bool(a.model or a.desk_image) or not a.public_art and not (a.model and a.desk_image):
+        raise ValueError("Choose --public-art or both --model and --desk-image")
     frame = render(a.model, a.desk_image, out)
     gif = out / "assets" / f"bongo-base-{theme_name}.gif"
     save_cache_gif([frame, frame], gif)
@@ -31,6 +33,7 @@ def build(a):
             "-mthumb",
             "-mfloat-abi=soft",
             "-DRAINY_BONGO=1",
+            *(["-DRAINY_BONGO_ID=0x4247"] if a.public_art else []),
             "-ffreestanding",
             "-fno-builtin",
             "-Oz",
@@ -115,9 +118,9 @@ def build(a):
         "petLayout": "fullscreen320x172",
         "variant": "bongo-v1",
         "petEnabled": True,
-        "petArtLicense": "User-provided Mver assets for personal use",
+        "petArtLicense": "MIT" if a.public_art else "User-provided Mver assets for personal use",
         "petGif": gif.relative_to(out).as_posix(),
-        "petIdentity": 0x4246,
+        "petIdentity": 0x4247 if a.public_art else 0x4246,
     }
     (out / "rainy75v2-ips.bin").write_bytes(image)
     (out / "manifest.json").write_text(
@@ -134,6 +137,7 @@ if __name__ == "__main__":
     p.add_argument("--out", type=Path, default=ROOT / "build/bongo")
     p.add_argument("--keys", type=Path, default=ROOT / "profiles/keys.json")
     p.add_argument("--theme", default="pink")
-    p.add_argument("--model", type=Path, required=True)
-    p.add_argument("--desk-image", type=Path, required=True)
+    p.add_argument("--model", type=Path)
+    p.add_argument("--desk-image", type=Path)
+    p.add_argument("--public-art", action="store_true")
     build(p.parse_args())

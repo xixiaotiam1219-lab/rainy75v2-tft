@@ -48,16 +48,16 @@ def payload(data):
 def image_bytes(entry, key):
     raw = gzip.decompress(base64.b64decode(entry['binGzipBase64'], validate=True))
     main = key in MAIN_HASHES
-    lyrics = key == 'ipsLyrics'
-    size = 294912 if main else 540672 if lyrics else 507904
+    variant = {'ipsLyrics': 'lyrics-v1', 'ipsBongo': 'bongo-v1'}.get(key)
+    size = 294912 if main else 540672 if variant else 507904
     expected = {
         'format': 'rainy75v2-tft/build-v1', 'target': 'main' if main else 'ips',
         'applicationBase': 0x2000 if main else 0x4000,
         'iapPid': 0x3079 if main else 0x3078, 'appPid': 0x3075,
         'bytes': size, 'sha256': sha256_bytes(raw), 'stockSha256': MAIN_HASHES.get(key, IPS_SHA),
-        'variant': 'lyrics-v1' if lyrics else None,
+        'variant': variant,
     }
-    if lyrics:
+    if variant:
         expected.update(requiredFlashKiB=1024, requiredSeries=13, codeStart=0x08080000,
                         imageEnd=0x08088000, iapEraseEnd=0x080c0000)
     if (len(raw) != size or entry['size'] != size or entry['sha256'] != expected['sha256']
@@ -132,7 +132,7 @@ def write_launcher(directory):
     (directory / '点我安装.cmd').write_bytes(script.replace('\n', '\r\n').encode('ascii'))
 
 
-def write_edition(output, frozen, firmware, font, edition):
+def write_edition(output, frozen, firmware, font, edition, bongo=None):
     name, title, layout, preview = edition
     lyric = layout is not None
     directory = output / name
@@ -142,7 +142,8 @@ def write_edition(output, frozen, firmware, font, edition):
     copy_named(ROOT / 'desktop', app / 'desktop', COMMON + (PLAYER if lyric else ()))
     settings = {'format': FORMAT, 'id': name, 'title': title, 'layout': layout}
     (app / 'edition.json').write_text(json.dumps(settings, ensure_ascii=False), 'utf8')
-    fw = {key: value for key, value in firmware.items() if lyric or key != 'ipsLyrics'}
+    excluded = ('ipsBongo',) if lyric else ('ipsLyrics',) if bongo else ('ipsLyrics', 'ipsBongo')
+    fw = {key: value for key, value in firmware.items() if key not in excluded}
     if lyric:
         shutil.copyfile(ROOT / 'desktop/edition-control.html', app / 'desktop/control.html')
         copy_named(runtime / 'app', app, ('FONT.BIN', 'FONT-NOTICE.txt', 'OFL-1.1.txt'))
@@ -151,6 +152,14 @@ def write_edition(output, frozen, firmware, font, edition):
         shutil.copytree(runtime / 'app/node_modules', app / 'node_modules')
         copy_named(ROOT / 'web', app / 'web', ('hid.mjs', 'protocol.mjs', 'font.mjs'))
         gif = waiting_gif(fw['ipsLyrics']['manifest']['themeColors'])
+    elif bongo:
+        gif = bongo
+        for key, entry in fw.items():
+            image_dir = directory / '固件' / key
+            image_dir.mkdir(parents=True)
+            (image_dir / 'firmware.bin').write_bytes(image_bytes(entry, key))
+            (image_dir / 'manifest.json').write_text(json.dumps(entry['manifest'], indent=2) + '\n', 'utf8')
+        (directory / '固件' / 'S1.GIF').write_bytes(gif)
     else:
         gif = (frozen / '固件与素材/assets/robot-pink.gif').read_bytes()
     png = base64.b64encode((ROOT / 'assets' / preview).read_bytes()).decode('ascii')
@@ -159,6 +168,8 @@ def write_edition(output, frozen, firmware, font, edition):
               'publicFontIdentity': {'bodyCrc': int.from_bytes(font[36:40], 'little'), 'bytes': len(font)}}
     if lyric:
         bundle['font'] = payload(font)
+    if bongo:
+        (directory / '小屏预览.png').write_bytes(base64.b64decode(png))
     html = bundle_html(ROOT / 'web/easy-install.html', bundle)
     verify_release_html(html, require_bundle_payload=False)
     (directory / 'install.html').write_text(html, 'utf8')
@@ -173,6 +184,7 @@ def write_edition(output, frozen, firmware, font, edition):
         + ('安装结束后播放 QQ 音乐或网易云音乐。歌词需要 Windows 后台和 USB 有线连接，网页可以关闭。'
            '以后通过「启动歌词同步」直接启动，可在「歌词设置」开启登录自启。\n\n' if lyric else
            '安装后可关闭安装窗口。桌宠和按键页由键盘自行运行。\n\n')
+        + ('本包附带三个对应版本的主控固件、白猫屏幕固件和 S1.GIF。\n\n' if bongo else '')
         + '若要清理旧歌词字库，可在刷桌宠版前打开页面底部「删除屏内字库」。\n\n'
           '安装会替换小屏第 1 个 GIF。若小屏仍是原厂界面，暂停歌词同步后在 WOBHub 选 GIF 槽位 1，再退出 WOBHub。\n'
           '安装中断时保持 USB 供电，在原窗口点「再试这一步」。若已关闭窗口且只看到升级设备，'
@@ -230,13 +242,43 @@ def main():
     parser.add_argument('--public', required=True, type=Path, help='Verified alpha.6 release directory')
     parser.add_argument('--main071', required=True, type=Path, help='0.71 patch, recovery image and model results')
     parser.add_argument('--out', required=True, type=Path, help='New output directory')
+    parser.add_argument('--bongo-dir', type=Path, help='Pack just Bongo Cat from this verified build')
+    parser.add_argument('--local-art', action='store_true', help='Package the Mver-based build for local personal use only')
     args = parser.parse_args()
     verify_release_dir(args.public)
     firmware, restore = load_firmware(args.public, args.main071)
     font = (args.public / '固件与素材/FONT.BIN').read_bytes()
     if int.from_bytes(font[36:40], 'little') != firmware['ipsLyrics']['manifest']['fontBodyCrc']:
         raise ValueError('Packaged font does not match the lyrics image')
+    if args.local_art and not args.bongo_dir:
+        parser.error('--local-art requires --bongo-dir')
     args.out.mkdir(parents=True, exist_ok=False)
+    if args.bongo_dir:
+        build = args.bongo_dir
+        entry = _load_target_entry(build, 'rainy75v2-ips.bin')
+        manifest = entry['manifest']
+        model = json.loads((build / 'bongo-model-validation.json').read_text('utf8'))
+        expected = (
+            (0x4246, 'cfb28f99cfe00a5b1a8c96e9d04181ab89efdfaba3c10b583a129453b8feff0e',
+             '76bf75daa5044046d4416035587ff8967638a018e838d85ecb5fce931d003672') if args.local_art else
+            (0x4247, '62b8d3c4885dc924dcc26f0daa0c7a6936eb7ba9f68196ddb285b890ea07bec2',
+             'd336f8a0e057d5e9aa43a9b040c720c3e9a23e04668fae720710b5ed7be332a9')
+        )
+        identity, image_sha, gif_sha = expected
+        if (manifest.get('petIdentity') != identity or entry['sha256'] != image_sha
+                or model.get('passed') is not True or model.get('sha256') != image_sha
+                or not args.local_art and manifest.get('petArtLicense') != 'MIT'):
+            raise ValueError('Bongo Cat build does not match its verified artwork and model')
+        if manifest.get('petGif') != 'assets/bongo-base-pink.gif':
+            raise ValueError('Unexpected Bongo Cat GIF path')
+        gif = (build / manifest['petGif']).read_bytes()
+        if sha256_bytes(gif) != gif_sha:
+            raise ValueError('Bongo Cat GIF does not match this build')
+        image_bytes(entry, 'ipsBongo')
+        firmware['ipsBongo'] = entry
+        preview = build / 'preview/bongo-idle-320.png'
+        write_edition(args.out, args.public, firmware, font, ('bongocat', 'Bongo Cat 白猫按键版', None, preview), gif)
+        return
     write_firmware(args.out, args.public, args.main071, firmware, restore)
     for edition in EDITIONS:
         write_edition(args.out, args.public, firmware, font, edition)

@@ -2,7 +2,8 @@
 import json
 import numpy as np
 from PIL import Image, ImageDraw, ImageChops, ImageFont
-from assets import rgb565
+from assets import ROOT, load, rgb565
+from original_cat_art import ARROWS, layers
 
 
 def rle(cells):
@@ -74,8 +75,7 @@ def compress(raw):
 
 
 def render(model, desk_image, out):
-    p = model / "img/standard"
-    q = model / "img/keyboard"
+    public = model is None
 
     def rgba(path):
         with Image.open(path) as image:
@@ -83,18 +83,20 @@ def render(model, desk_image, out):
                 raise ValueError(f"Expected 612x354: {path.name}")
             return image.convert("RGBA")
 
-    cat = rgba(p / "cat默认.png")
-    leftup = rgba(q / "righthand/rightup默认.png")
-    rightup = rgba(p / "up默认猫左爪.png")
-    desk = rgba(desk_image)
+    if public:
+        cat, leftup, rightup, desk = layers()
+    else:
+        p = model / "img/standard"
+        cat = rgba(p / "cat默认.png")
+        leftup = rgba(model / "img/keyboard/righthand/rightup默认.png")
+        rightup = rgba(p / "up默认猫左爪.png")
+        desk = rgba(desk_image)
     size = (320, 172)
     scaled = lambda im: im.resize(size, Image.Resampling.LANCZOS)
 
     def reduced(im):
         return scaled(im).convert("RGB")
 
-    config = json.loads((p.parents[1] / "config.json").read_text())["standard"]
-    assert config["hand"] == config["keyboard"]
     special = {
         192: 53,
         191: 56,
@@ -136,8 +138,11 @@ def render(model, desk_image, out):
         outline="#161616",
         width=4,
     )
-    font = ImageFont.truetype("arialbd.ttf", 36)
-    small = ImageFont.truetype("arialbd.ttf", 23)
+    if public:
+        glyphs = load(ROOT / "profiles/font.json")["ascii"]
+    else:
+        font = ImageFont.truetype("arialbd.ttf", 36)
+        small = ImageFont.truetype("arialbd.ttf", 23)
     caps = {}
     keys = {}
     hands = {}
@@ -154,13 +159,24 @@ def render(model, desk_image, out):
                 layout.rounded_rectangle(
                     box, radius=7, fill="white", outline="#262626", width=3
                 )
-                layout.text(
-                    ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2),
-                    label,
-                    font=font if len(label) < 3 else small,
-                    fill="#181818",
-                    anchor="mm",
-                )
+                if public:
+                    scale = 4 if len(label) < 3 else 2
+                    start_x = (box[0] + box[2] - (len(label) * 6 - 1) * scale) // 2
+                    start_y = (box[1] + box[3] - 7 * scale) // 2
+                    for i, char in enumerate(label.upper()):
+                        for gy, row_bits in enumerate(glyphs.get(char, glyphs["?"])):
+                            for gx, bit in enumerate(row_bits):
+                                if bit == "1":
+                                    left, top = start_x + (i * 6 + gx) * scale, start_y + gy * scale
+                                    layout.rectangle((left, top, left + scale - 1, top + scale - 1), fill="#181818")
+                else:
+                    layout.text(
+                        ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2),
+                        label,
+                        font=font if len(label) < 3 else small,
+                        fill="#181818",
+                        anchor="mm",
+                    )
                 legend[code] = box
             x += width
 
@@ -261,19 +277,49 @@ def render(model, desk_image, out):
     arrows = Image.composite(desk, Image.new("RGBA", scene.size), arrow_mask)
     scene.alpha_composite(arrows, dest=(arrow_dx, 0))
     scene.alpha_composite(project(board))
+    def draw_paw(x, y, ax=86, ay=60):
+        # Scaled silhouette reaches from the shoulder to the selected cap.
+        im = Image.new("RGBA", size)
+        d = ImageDraw.Draw(im)
+        dx, dy = x - ax, y - ay
+        length = (dx * dx + dy * dy) ** 0.5
+        nx, ny = -dy / length, dx / length
+
+        def edge(t, w):
+            return (round(ax + t * dx + nx * w), round(ay + t * dy + ny * w))
+
+        poly = [
+            edge(0, 9),
+            edge(0.32, 9),
+            edge(0.75, 6),
+            edge(0.96, 4),
+            edge(1, 1),
+            edge(1, -1),
+            edge(0.96, -4),
+            edge(0.75, -6),
+            edge(0.32, -9),
+            edge(0, -9),
+        ]
+        d.polygon(poly, fill="white")
+        d.line(poly, width=2, fill="black", joint="curve")
+        return im
+
     original = {}
-    for i, (v,) in enumerate(config["hand"]):
-        mask = (
-            scaled(Image.open(p / "keyboard" / f"{i}.png").convert("RGBA"))
-            .getchannel("A")
-            .point(lambda v: 255 if v > 100 else 0)
-        )
-        a, b, c, d = mask.getbbox()
-        original[hid(v)] = (
-            (a + c) / 2,
-            (b + d) / 2,
-            scaled(Image.open(p / "hand" / f"{i}.png").convert("RGBA")),
-        )
+    if not public:
+        config = load(model / "config.json")["standard"]
+        assert config["hand"] == config["keyboard"]
+        for i, (v,) in enumerate(config["hand"]):
+            mask = (
+                scaled(Image.open(p / "keyboard" / f"{i}.png").convert("RGBA"))
+                .getchannel("A")
+                .point(lambda v: 255 if v > 100 else 0)
+            )
+            a, b, c, d = mask.getbbox()
+            original[hid(v)] = (
+                (a + c) / 2,
+                (b + d) / 2,
+                scaled(Image.open(p / "hand" / f"{i}.png").convert("RGBA")),
+            )
     for code, box in legend.items():
         mask = Image.new("L", board.size)
         ImageDraw.Draw(mask).rounded_rectangle(box, radius=7, fill=255)
@@ -283,6 +329,9 @@ def render(model, desk_image, out):
         keys[code] = (a, b, c - 1, d - 1)
         tx = (a + c) / 2
         ty = (b + d) / 2
+        if public:
+            hands[code] = draw_paw(round(tx), round(ty), ax=207, ay=67)
+            continue
         sx, sy, hand = original.get(
             code,
             min(
@@ -314,47 +363,13 @@ def render(model, desk_image, out):
         dr.line((x - 8, y - 1, x + 7, y + 2), fill="black", width=4)
     backgrounds = list(map(reduced, [idle, cleanleft, cleanright, blink]))
 
-    def arrow_paw(x, y):
-        # Scaled silhouette reaches from the left shoulder to the exact cap.
-        im = Image.new("RGBA", size)
-        d = ImageDraw.Draw(im)
-        ax, ay = 86, 60
-        dx, dy = x - ax, y - ay
-        length = (dx * dx + dy * dy) ** 0.5
-        nx, ny = -dy / length, dx / length
-
-        def edge(t, w):
-            return (round(ax + t * dx + nx * w), round(ay + t * dy + ny * w))
-
-        poly = [
-            edge(0, 9),
-            edge(0.32, 9),
-            edge(0.75, 6),
-            edge(0.96, 4),
-            edge(1, 1),
-            edge(1, -1),
-            edge(0.96, -4),
-            edge(0.75, -6),
-            edge(0.32, -9),
-            edge(0, -9),
-        ]
-        d.polygon(poly, fill="white")
-        d.line(poly, width=2, fill="black", joint="curve")
-        return im
-
     for k, x, y in [(80, 112, 212), (82, 163, 226), (79, 219, 242), (81, 126, 264)]:
-        corners = {
-            80: [(107, 196), (140, 201), (122, 226), (84, 218)],
-            82: [(158, 209), (192, 215), (171, 241), (135, 233)],
-            79: [(212, 220), (251, 229), (228, 258), (188, 248)],
-            81: [(116, 243), (154, 251), (131, 284), (93, 275)],
-        }
         mask = Image.new("L", (612, 354))
-        ImageDraw.Draw(mask).polygon([(px + arrow_dx, py) for px, py in corners[k]], fill=255)
+        ImageDraw.Draw(mask).polygon([(px + arrow_dx, py) for px, py in ARROWS[k]], fill=255)
         caps[k] = scaled(mask).point(lambda v: 255 if v >= 128 else 0)
         a, b, c, d = caps[k].getbbox()
         keys[k] = (a, b, c - 1, d - 1)
-        hands[k] = arrow_paw(round((x + arrow_dx) * 320 / 612), round(y * 172 / 354))
+        hands[k] = draw_paw(round((x + arrow_dx) * 320 / 612), round(y * 172 / 354))
     # Encode opaque backgrounds once, deduplicating scanlines. Hand rows use outline widths from actual silhouette.
     colors = [
         "#000000",
